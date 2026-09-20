@@ -220,3 +220,4 @@ __marimo__/
 scratch_pad/*
 
 .vscode/
+build-test/

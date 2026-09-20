@@ -12,7 +12,8 @@ FetchContent_MakeAvailable(Catch2)
 # One aggregate test binary. Mirror src/cpp/slodl/<area>/<file>.cpp with a
 # tests/cpp/<area>/test_<file>.cpp entry here as the suite grows.
 add_executable(slodl_cpp_tests
-# put testfiles here
+    tensor/test_tensor.cpp
+    tensor/test_tensor_storage.cpp
 )
 target_link_libraries(slodl_cpp_tests
     PRIVATE
@@ -21,6 +22,11 @@ target_link_libraries(slodl_cpp_tests
 )
 
 # Register each TEST_CASE as an individual CTest entry.
+# One discovery pass per source area, so every test name gets an "<area>/"
+# prefix. With "cmake.ctest.testSuiteDelimiter": "/" the VS Code Testing view
+# then groups them into a tree instead of one flat list. Each area has one tag
+# shared by all its test files ([tensor] here), so a new file in an existing
+# area needs no change below; a new area adds its own line.
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
-catch_discover_tests(slodl_cpp_tests)
+catch_discover_tests(slodl_cpp_tests TEST_PREFIX "tensor/" TEST_SPEC "[tensor]")
