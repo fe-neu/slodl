@@ -1,3 +1,4 @@
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -130,14 +131,72 @@ Tensor& Tensor::operator=(double value) {
     return *this;
 }
 
-std::string Tensor::repr() const {
-    std::string out = "Tensor(shape=[";
-    for(std::size_t i = 0; i < dims.size(); i++){
-        out += (i ? ", " : "") + std::to_string(dims[i]);
+namespace {
+
+constexpr std::size_t kSummaryThreshold = 1000;
+constexpr std::size_t kEdgeItems = 3;
+
+std::string format_value(double value) {
+    std::ostringstream stream;
+    stream << value;
+    return stream.str();
+}
+
+void append_dimension(
+    std::string& out,
+    const double* data,
+    const std::vector<std::size_t>& dims,
+    const std::vector<std::size_t>& strides,
+    std::size_t axis,
+    std::size_t offset,
+    bool summarize,
+    std::size_t indent
+) {
+    if (axis == dims.size()) {
+        out += format_value(data[offset]);
+        return;
+    }
+
+    const std::size_t length = dims[axis];
+    const bool is_innermost = (axis + 1 == dims.size());
+    const bool skip_middle = summarize && length > 2 * kEdgeItems;
+
+    const std::string separator =
+        is_innermost ? ", " : ",\n" + std::string(indent + 1, ' ');
+
+    out += "[";
+    for (std::size_t i = 0; i < length; i++) {
+        if (i > 0) {
+            out += separator;
+        }
+        if (skip_middle && i == kEdgeItems) {
+            out += "...";
+            i = length - kEdgeItems - 1;
+            continue;
+        }
+        append_dimension(out, data, dims, strides, axis + 1,
+                         offset + i * strides[axis], summarize, indent + 1);
     }
     out += "]";
-    if (dims.empty()) {
-        out += ", value=" + std::to_string(item());
+}
+
+}
+
+std::string Tensor::repr() const {
+    const std::string prefix = "Tensor(";
+    const std::size_t element_count = get_size_for_dims(dims);
+    const bool summarize = element_count > kSummaryThreshold;
+
+    std::string out = prefix;
+    append_dimension(out, data(), dims, strides, 0, 0, summarize,
+                     prefix.size());
+
+    if (summarize) {
+        out += ", shape=[";
+        for (std::size_t i = 0; i < dims.size(); i++) {
+            out += (i ? ", " : "") + std::to_string(dims[i]);
+        }
+        out += "]";
     }
     return out + ")";
 }

@@ -45,7 +45,8 @@ class Tensor:
     >>> from slodl import Tensor
     >>> t = Tensor([2, 2], [1, 2, 3, 4])
     >>> t
-    Tensor(shape=[2, 2])
+    Tensor([[1, 2],
+            [3, 4]])
     >>> t.shape
     [2, 2]
     >>> t[1][0]
@@ -242,7 +243,7 @@ class Tensor:
         >>> from slodl import Tensor
         >>> t = Tensor([2, 2], [1, 2, 3, 4])
         >>> t[0]
-        Tensor(shape=[2])
+        Tensor([1, 2])
         >>> t[0][1]
         2.0
         >>> t[-1][-1]
