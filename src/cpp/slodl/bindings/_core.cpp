@@ -7,4 +7,5 @@
 PYBIND11_MODULE(_core, m) {
     m.doc() = "Compiled core for slodl. Internal; use the slodl package.";
 
+    register_tensor(m);
 }

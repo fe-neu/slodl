@@ -3,7 +3,8 @@ project(slodl LANGUAGES CXX)
 
 
 add_library(slodl_core STATIC
-    # src/cpp/slodl/something.cpp
+    src/cpp/slodl/tensor/tensor.cpp
+    src/cpp/slodl/tensor/tensor_storage.cpp
     )
 target_include_directories(slodl_core PUBLIC src/cpp)
 target_compile_features(slodl_core PUBLIC cxx_std_17)
@@ -23,6 +24,7 @@ if(SLODL_BUILD_PYTHON)
     # wraps comes from slodl_core. Add each new binding .cpp below.
     pybind11_add_module(_core
         src/cpp/slodl/bindings/_core.cpp
+        src/cpp/slodl/bindings/tensor/tensor.cpp
     )
     target_link_libraries(_core PRIVATE slodl_core)
 

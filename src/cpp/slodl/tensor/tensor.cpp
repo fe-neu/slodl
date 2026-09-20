@@ -1,4 +1,5 @@
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 #include "tensor.hpp"
@@ -121,4 +122,16 @@ Tensor& Tensor::operator=(double value) {
     }
     storage->ptr()[start_offset] = value;
     return *this;
+}
+
+std::string Tensor::repr() const {
+    std::string out = "Tensor(shape=[";
+    for(std::size_t i = 0; i < dims.size(); i++){
+        out += (i ? ", " : "") + std::to_string(dims[i]);
+    }
+    out += "]";
+    if (dims.empty()) {
+        out += ", value=" + std::to_string(item());
+    }
+    return out + ")";
 }

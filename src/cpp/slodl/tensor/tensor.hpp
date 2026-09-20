@@ -42,8 +42,9 @@ public:
     double item() const;
     Tensor& operator=(double value);
 
+    std::string repr() const;
+
     // const std::vector<double>& raw() const;
-    // std::string repr() const;
 };
 
 #endif
