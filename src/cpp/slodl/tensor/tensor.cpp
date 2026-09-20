@@ -1,0 +1,124 @@
+#include <stdexcept>
+#include <utility>
+
+#include "tensor.hpp"
+#include "tensor_storage.hpp"
+
+Tensor::Tensor(std::vector<std::size_t> dims)
+    : storage(std::make_shared<TensorStorage>(get_size_for_dims(dims), 0.0)),
+    start_offset(0),
+    strides(get_strides_for_dims(dims)),
+    dims(dims) {}
+
+Tensor::Tensor(std::vector<std::size_t> dims, double init_value)
+    : storage(std::make_shared<TensorStorage>(get_size_for_dims(dims), init_value)),
+    start_offset(0),
+    strides(get_strides_for_dims(dims)),
+    dims(dims) {}
+
+Tensor::Tensor(std::vector<std::size_t> dims, std::vector<double> data)
+    : start_offset(0),
+    strides(get_strides_for_dims(dims)),
+    dims(dims) {
+        if(data.size() != get_size_for_dims(dims)) {
+            throw std::out_of_range("Given Data does not fit given dimensions");
+        }
+        storage = std::make_shared<TensorStorage>(std::move(data));
+    }
+
+Tensor::Tensor(
+    std::shared_ptr<TensorStorage> storage,
+    std::size_t start_offset,
+    std::vector<std::size_t> strides,
+    std::vector<std::size_t> dims
+) : storage(std::move(storage)),
+    start_offset(start_offset),
+    strides(std::move(strides)),
+    dims(std::move(dims)) {}
+
+
+std::size_t Tensor::get_size_for_dims(std::vector<std::size_t> dims) {
+    std::size_t tensor_size = 1;
+    for( const std::size_t& i : dims) {
+        tensor_size *= i;
+    }
+    return tensor_size;
+}
+
+std::vector<std::size_t> Tensor::get_strides_for_dims(std::vector<std::size_t> dims) {
+    std::vector<std::size_t> offsets(dims.size(), 1);
+    for(std::size_t i = dims.size(); i-- > 1;){
+        offsets[i - 1] = offsets[i] * dims[i];
+    }
+    return offsets;
+}
+
+std::size_t Tensor::get_offset_for_flat_index(std::size_t flat_index) const {
+    std::size_t offset = start_offset;
+    for(std::size_t i = dims.size(); i-- > 0;){
+        offset += (flat_index % dims[i]) * strides[i];
+        flat_index /= dims[i];
+    }
+    return offset;
+}
+
+const std::vector<std::size_t>& Tensor::shape() const { return dims; }
+
+Tensor Tensor::operator[](std::size_t index) const {
+    if (dims.empty()) {
+        throw std::out_of_range("Cannot index a 0-dimensional tensor");
+    }
+    if (index >= dims[0]) {
+        throw std::out_of_range("Index out of range");
+    }
+    return Tensor(
+        storage,
+        start_offset + index * strides[0],
+        std::vector<std::size_t>(strides.begin() + 1, strides.end()),
+        std::vector<std::size_t>(dims.begin() + 1, dims.end())
+    );
+}
+
+double Tensor::item() const {
+    if (!dims.empty()) {
+        throw std::out_of_range("item() requires a 0-dimensional tensor");
+    }
+    return storage->ptr()[start_offset];
+}
+
+Tensor& Tensor::operator=(const Tensor& other) {
+    if (this == &other) {
+        return *this;
+    }
+    if (dims != other.dims) {
+        throw std::invalid_argument("Cannot assign a tensor of a different shape");
+    }
+
+    const std::size_t element_count = get_size_for_dims(dims);
+    double* destination = storage->ptr();
+
+    if (storage == other.storage) {
+        std::vector<double> source_values(element_count);
+        for(std::size_t i = 0; i < element_count; i++){
+            source_values[i] = other.storage->ptr()[other.get_offset_for_flat_index(i)];
+        }
+        for(std::size_t i = 0; i < element_count; i++){
+            destination[get_offset_for_flat_index(i)] = source_values[i];
+        }
+    }
+    else {
+        const double* source = other.storage->ptr();
+        for(std::size_t i = 0; i < element_count; i++){
+            destination[get_offset_for_flat_index(i)] = source[other.get_offset_for_flat_index(i)];
+        }
+    }
+    return *this;
+}
+
+Tensor& Tensor::operator=(double value) {
+    if (!dims.empty()) {
+        throw std::out_of_range("Cannot assign a scalar to a non-scalar tensor");
+    }
+    storage->ptr()[start_offset] = value;
+    return *this;
+}
