@@ -24,6 +24,7 @@ if(SLODL_BUILD_PYTHON)
     # wraps comes from slodl_core. Add each new binding .cpp below.
     pybind11_add_module(_core
         src/cpp/slodl/bindings/_core.cpp
+        src/cpp/slodl/bindings/conversions.cpp
         src/cpp/slodl/bindings/tensor/tensor.cpp
     )
     target_link_libraries(_core PRIVATE slodl_core)

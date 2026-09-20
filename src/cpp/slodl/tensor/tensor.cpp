@@ -65,6 +65,12 @@ std::size_t Tensor::get_offset_for_flat_index(std::size_t flat_index) const {
 
 const std::vector<std::size_t>& Tensor::shape() const { return dims; }
 
+const std::vector<std::size_t>& Tensor::element_strides() const { return strides; }
+
+double* Tensor::data() { return storage->ptr() + start_offset; }
+
+const double* Tensor::data() const { return storage->ptr() + start_offset; }
+
 Tensor Tensor::operator[](std::size_t index) const {
     if (dims.empty()) {
         throw std::out_of_range("Cannot index a 0-dimensional tensor");

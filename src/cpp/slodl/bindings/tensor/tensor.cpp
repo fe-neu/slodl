@@ -5,6 +5,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector <-> list/tuple, for dims and data
 
+#include "slodl/bindings/conversions.hpp"
 #include "slodl/bindings/register.hpp"
 #include "slodl/tensor/tensor.hpp"
 
@@ -29,7 +30,10 @@ std::size_t normalize_index(const Tensor& self, py::ssize_t index) {
 }  // namespace
 
 void register_tensor(py::module_& m) {
-    py::class_<Tensor>(m, "Tensor")
+    // py::buffer_protocol() lets NumPy read a Tensor's memory without copying.
+    py::class_<Tensor>(m, "Tensor", py::buffer_protocol())
+        .def_buffer(&as_buffer)
+        .def_static("from_numpy", &as_tensor, py::arg("array"))
         .def(py::init<std::vector<std::size_t>>(), py::arg("dims"))
         .def(py::init<std::vector<std::size_t>, double>(),
              py::arg("dims"), py::arg("init_value"))

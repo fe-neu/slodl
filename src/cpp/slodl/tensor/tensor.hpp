@@ -34,6 +34,11 @@ public:
     
     const std::vector<std::size_t>& shape() const;
 
+    const std::vector<std::size_t>& element_strides() const;
+
+    double* data();
+    const double* data() const;
+
     Tensor operator[](std::size_t index) const;
 
     Tensor(const Tensor& other) = default;

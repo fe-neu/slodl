@@ -3,7 +3,12 @@
 
 from collections.abc import Sequence
 
+import numpy as np
+import numpy.typing as npt
+
 class Tensor:
+    @staticmethod
+    def from_numpy(array: npt.NDArray[np.float64]) -> Tensor: ...
     def __init__(
         self,
         dims: Sequence[int],
