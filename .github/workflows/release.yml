@@ -1,0 +1,103 @@
+name: release
+
+# Build the sdist and the full wheel matrix, then publish to PyPI via Trusted
+# Publishing (OIDC - no stored token).
+#
+#   * push a tag `vX.Y.Z`  -> build everything, publish to PyPI
+#   * run manually         -> build everything; publish to TestPyPI, or nowhere
+#
+# Trusted Publisher config expected on the index side (pending publisher is
+# fine before the first upload):
+#   owner            fe-neu
+#   repository       slodl
+#   workflow         release.yml
+#   environment      pypi         (on pypi.org)
+#   environment      testpypi     (on test.pypi.org)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Publish the built artifacts to..."
+        type: choice
+        options: [testpypi, none]
+        default: testpypi
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build_wheels:
+    name: wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu -> manylinux x86_64, windows -> win_amd64, macos-14 ->
+        # both arm64 (native) and x86_64 (cross-compiled) - see the
+        # [tool.cibuildwheel.macos] comment for why there's no macos-13
+        # (Intel) runner here. The Python/skip/arch selection lives in
+        # [tool.cibuildwheel].
+        os: [ubuntu-latest, windows-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Action tag tracks the cibuildwheel version; keep it in step with the
+      # one the config was validated against.
+      - uses: pypa/cibuildwheel@v4.2.0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+          if-no-files-found: error
+
+  build_sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build sdist
+        run: pipx run build --sdist
+
+      - name: Check metadata
+        run: pipx run twine check --strict dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: publish (${{ github.event_name == 'push' && 'PyPI' || inputs.target }})
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || inputs.target == 'testpypi'
+    environment:
+      name: ${{ github.event_name == 'push' && 'pypi' || 'testpypi' }}
+      url: ${{ github.event_name == 'push' && 'https://pypi.org/p/slodl' || 'https://test.pypi.org/p/slodl' }}
+    permissions:
+      id-token: write
+    steps:
+      - name: Collect artifacts into dist/
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}

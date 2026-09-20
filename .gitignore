@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+scratch_pad/*
+
+.vscode/
+build-test/

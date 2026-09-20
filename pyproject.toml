@@ -1,0 +1,120 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "slodl"
+version = "0.0.1"
+description = "A small Python Deep-Learning-Package with a C++ Core"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Felix Neu", email = "felix.neu.ide@web.de" },
+]
+keywords = [
+    "neural-networks",
+    "deep-learning",
+    "machine-learning",
+    "numpy",
+    "c++",
+    "pybind11",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
+dependencies = ["numpy>=1.21"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/fe-neu/slodl"
+Repository = "https://github.com/fe-neu/slodl"
+Issues = "https://github.com/fe-neu/slodl/issues"
+Changelog = "https://github.com/fe-neu/slodl/blob/main/CHANGELOG.md"
+
+[tool.scikit-build]
+# Fail loudly if an older scikit-build-core than we pinned tries to build us.
+minimum-version = "build-system.requires"
+
+# Out-of-source build tree, one per Python/platform tag so switching
+# interpreters does not force a full reconfigure.
+build-dir = "build/{wheel_tag}"
+
+# The pure-Python package does not sit at the repo root or directly in ./src,
+# so point scikit-build-core at it explicitly. It is installed as top-level
+# `slodl`; CMake's `install(TARGETS _core DESTINATION slodl)` drops the compiled
+# extension into the same package, giving `slodl._core`.
+wheel.packages = ["src/python/slodl"]
+
+# `pip install -e .` recompiles automatically when a C++/CMake file changes.
+editable.rebuild = true
+
+[tool.scikit-build.sdist]
+# scikit-build-core seeds the SDist from the git-tracked file list. That already
+# carries everything needed to compile from source (src/cpp/ sources and headers,
+# CMakeLists.txt, CMakePresets.json, the src/python/ package) and nothing from the
+# untracked build/, venv/, or build-test/ trees. Drop what has no role once the
+# project is a tarball: repo-management files, and the test suites (the wheel
+# build never enables the C++ tests, and running the Python tests is a
+# clone-the-repo workflow, not an sdist one).
+exclude = [
+    ".github/",
+    ".gitignore",
+    "tests/",
+]
+
+[tool.cibuildwheel]
+# Minimal target set for the first release: CPython 3.9-3.13 on the three
+# mainstream desktop/server platforms (Linux x86_64, macOS, Windows AMD64).
+# No PyPy, no musllinux, no Linux aarch64 yet - each can be added later
+# without a breaking change. Architectures come from `archs = "auto"` (the
+# default), so the 64-bit CI runners never attempt 32-bit builds.
+build = "cp39-* cp310-* cp311-* cp312-* cp313-*"
+skip = "*-musllinux*"
+build-frontend = "build"
+
+# Exercise every built wheel against the Python suite. tests/ is kept out of
+# the sdist but is present in the CI checkout, so {project} resolves to it.
+test-requires = "pytest>=8"
+test-command = "python -m pytest {project}/tests/python"
+
+[tool.cibuildwheel.linux]
+# manylinux_2_28 ships GCC 12, comfortably past the C++17 core's needs (the
+# default manylinux2014 / GCC 10 would also build it).
+manylinux-x86_64-image = "manylinux_2_28"
+
+[tool.cibuildwheel.windows]
+# `archs = "auto"` on a 64-bit Windows runner would also cross-build 32-bit
+# (win32) wheels; the minimal set is 64-bit only.
+archs = ["AMD64"]
+
+[tool.cibuildwheel.macos]
+# Build both macOS wheels from the single Apple-silicon runner instead of
+# needing a separate Intel (macos-13) one: Xcode's clang cross-compiles
+# x86_64 from an arm64 host, and GitHub's arm64 macOS runners ship Rosetta 2,
+# so cibuildwheel can still run the test suite against the x86_64 wheel it
+# just built. (macos-13 hosted runners have effectively no free-tier
+# capacity left as GitHub retires the Intel macOS fleet - jobs queue
+# indefinitely rather than failing outright.)
+archs = ["x86_64", "arm64"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
