@@ -5,6 +5,8 @@ project(slodl LANGUAGES CXX)
 add_library(slodl_core STATIC
     src/cpp/slodl/tensor/tensor.cpp
     src/cpp/slodl/tensor/tensor_storage.cpp
+    src/cpp/slodl/tensor/ops.cpp
+    src/cpp/slodl/autograd/autograd.cpp
     )
 target_include_directories(slodl_core PUBLIC src/cpp)
 target_compile_features(slodl_core PUBLIC cxx_std_17)

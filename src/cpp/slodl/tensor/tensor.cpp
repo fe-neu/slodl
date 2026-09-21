@@ -3,8 +3,9 @@
 #include <string>
 #include <utility>
 
-#include "tensor.hpp"
-#include "tensor_storage.hpp"
+#include "slodl/tensor/tensor.hpp"
+#include "slodl/tensor/tensor_storage.hpp"
+#include "slodl/autograd/autograd.hpp"
 
 Tensor::Tensor(std::vector<std::size_t> dims)
     : storage(std::make_shared<TensorStorage>(get_size_for_dims(dims), 0.0)),

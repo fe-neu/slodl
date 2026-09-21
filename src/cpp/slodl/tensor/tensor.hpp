@@ -5,8 +5,11 @@
 #include <string>
 #include <memory>
 
-#include "tensor_storage.hpp"
+#include "slodl/tensor/tensor_storage.hpp"
 
+
+class Node;
+struct AutogradMeta;
 
 class Tensor {
 private:
@@ -26,6 +29,8 @@ private:
         std::vector<std::size_t> strides,
         std::vector<std::size_t> dims
     );
+
+    std::shared_ptr<AutogradMeta> meta;
     
 public:
     Tensor(std::vector<std::size_t> dims);
@@ -52,6 +57,15 @@ public:
     std::string repr() const;
 
     // const std::vector<double>& raw() const;
+
+    // Autograd:
+    bool requires_grad() const;
+    Tensor& requires_grad_(bool flag = true);
+    bool is_leaf() const;
+    const Tensor* grad() const;
+    void zero_grad();
+    void backward();
+    Tensor detach() const; 
 };
 
 #endif
