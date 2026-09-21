@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import numpy as np
 import numpy.typing as npt
 
@@ -19,31 +17,34 @@ class Tensor:
 
     Parameters
     ----------
-    dims : sequence of int or ndarray
-        Size of each dimension. An empty sequence creates a 0-dimensional
-        tensor holding a single value. A NumPy array is instead taken as the
-        tensor's contents, equivalent to :meth:`Tensor.from_numpy`; a list is
-        always read as dimensions.
-    data : float or sequence of float, optional
-        A float fills every element with that value. A sequence is taken as
-        the elements themselves, in row-major order, and must contain exactly
-        ``prod(dims)`` of them. If omitted, the tensor is filled with zeros.
+    data : array_like
+        The tensor's contents. Nested sequences give a tensor of the
+        corresponding shape, a NumPy array gives a tensor of that array's
+        shape, and a bare number gives a 0-dimensional tensor. The elements
+        are copied and converted to ``float64``.
 
     Raises
     ------
-    IndexError
-        If ``data`` is a sequence whose length does not match ``dims``. (The
-        core raises ``std::out_of_range`` here, which pybind11 maps to
-        ``IndexError``; ``ValueError`` would fit better.)
+    ValueError
+        If ``data`` is ragged, such as ``[[1, 2], [3]]``, or holds something
+        that cannot be read as a number.
 
     See Also
     --------
+    slodl.zeros, slodl.ones, slodl.full : Create a tensor from a shape
+        instead of from data.
     Tensor.item : Read the value out of a 0-dimensional tensor.
+
+    Notes
+    -----
+    Like ``numpy.array`` and ``torch.tensor``, this takes the *values* of the
+    tensor, not its dimensions. ``Tensor([2, 3])`` is a 1-dimensional tensor
+    holding 2.0 and 3.0; for a 2x3 tensor of zeros use ``zeros([2, 3])``.
 
     Examples
     --------
     >>> from slodl import Tensor
-    >>> t = Tensor([2, 2], [1, 2, 3, 4])
+    >>> t = Tensor([[1, 2], [3, 4]])
     >>> t
     Tensor([[1, 2],
             [3, 4]])
@@ -59,30 +60,20 @@ class Tensor:
     >>> t[0][1]
     50.0
 
-    A NumPy array can be used directly, and shares no memory with the tensor:
+    A NumPy array or a bare number works too:
 
     >>> import numpy as np
     >>> Tensor(np.eye(2)).shape
     [2, 2]
+    >>> Tensor(5.0).item()
+    5.0
     """
 
-    def __init__(
-        self,
-        dims: Sequence[int] | np.ndarray,
-        data: float | Sequence[float] | None = None,
-    ) -> None:
-        # Composition, not inheritance: _impl is the compiled tensor.
-        if isinstance(dims, np.ndarray):
-            if data is not None:
-                raise TypeError(
-                    "data cannot be given when constructing from an array")
-            self._impl = _core.Tensor.from_numpy(dims)
-        elif data is None:
-            self._impl = _core.Tensor(list(dims))
-        elif isinstance(data, (int, float)):
-            self._impl = _core.Tensor(list(dims), float(data))
+    def __init__(self, data: npt.ArrayLike | Tensor) -> None:
+        if isinstance(data, Tensor):
+            self._impl = data._impl.clone()
         else:
-            self._impl = _core.Tensor(list(dims), [float(x) for x in data])
+            self._impl = _core.Tensor.from_numpy(np.asarray(data, dtype=np.float64))
 
     @classmethod
     def from_numpy(cls, array: npt.ArrayLike) -> Tensor:
@@ -144,7 +135,7 @@ class Tensor:
         --------
         >>> import numpy as np
         >>> from slodl import Tensor
-        >>> t = Tensor([2, 2], [1, 2, 3, 4])
+        >>> t = Tensor([[1, 2], [3, 4]])
         >>> np.asarray(t)
         array([[1., 2.],
                [3., 4.]])
@@ -164,6 +155,29 @@ class Tensor:
             raise ValueError("cannot avoid a copy for this conversion")
         return array
 
+    def clone(self) -> Tensor:
+        """Return a copy with its own storage.
+
+        The copy holds the same values but shares nothing with this tensor,
+        so writing to either leaves the other unchanged. Cloning a view
+        produces a tensor of the view's shape, laid out contiguously.
+
+        Returns
+        -------
+        Tensor
+            An independent tensor with the same shape and values.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> t = Tensor([[1, 2], [3, 4]])
+        >>> copy = t.clone()
+        >>> copy[0][0] = 99.0
+        >>> t[0][0]
+        1.0
+        """
+        return Tensor._from_impl(self._impl.clone())
+
     @classmethod
     def _from_impl(cls, impl: _core.Tensor) -> Tensor:
         """Wrap a compiled tensor without constructing new storage."""
@@ -177,8 +191,8 @@ class Tensor:
 
         Examples
         --------
-        >>> from slodl import Tensor
-        >>> Tensor([2, 3]).shape
+        >>> from slodl import zeros
+        >>> zeros([2, 3]).shape
         [2, 3]
         """
         return self._impl.shape
@@ -203,7 +217,7 @@ class Tensor:
         Examples
         --------
         >>> from slodl import Tensor
-        >>> Tensor([], 5.0).item()
+        >>> Tensor(5.0).item()
         5.0
         """
         return self._impl.item()
@@ -241,7 +255,7 @@ class Tensor:
         Examples
         --------
         >>> from slodl import Tensor
-        >>> t = Tensor([2, 2], [1, 2, 3, 4])
+        >>> t = Tensor([[1, 2], [3, 4]])
         >>> t[0]
         Tensor([1, 2])
         >>> t[0][1]
@@ -283,7 +297,7 @@ class Tensor:
         Examples
         --------
         >>> from slodl import Tensor
-        >>> t = Tensor([2, 2], [1, 2, 3, 4])
+        >>> t = Tensor([[1, 2], [3, 4]])
         >>> t[0][0] = 9.0
         >>> t[0][0]
         9.0

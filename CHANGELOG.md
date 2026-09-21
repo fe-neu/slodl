@@ -10,9 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `Tensor`: a dense, n-dimensional array of `float64` values, implemented in
-  C++17 and exposed through `slodl._core`. Construct it from dimensions alone
-  (zero-filled), from dimensions plus a fill value, or from dimensions plus
-  row-major data.
+  C++17 and exposed through `slodl._core`. In Python it is constructed from
+  data, as `Tensor([[1, 2], [3, 4]])`, matching `numpy.array` and
+  `torch.tensor`; nested sequences, NumPy arrays, other tensors and bare
+  numbers are all accepted, and ragged input is rejected. The C++ class keeps
+  its dimension-based constructors.
+- `zeros`, `ones` and `full`: create a tensor from a shape rather than from
+  data, mirroring their NumPy counterparts.
+- `Tensor.clone` (and `Tensor::clone` in the core): a deep copy with its own
+  storage, laid out contiguously even when cloning a view.
 - Views: indexing a tensor returns a view onto the same storage rather than a
   copy, so writes through a view are visible from the tensor it came from. A
   view keeps its storage alive even after the tensor it came from is gone.
@@ -46,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both raise `IndexError` where `ValueError` would fit better. This is because
   the core throws `std::out_of_range`, which pybind11 maps to `IndexError`.
 - A tensor variable cannot be pointed at different storage once created, since
-  assignment copies values. There is no `rebind` or `clone` yet.
+  assignment copies values. `clone` covers making an independent copy, but
+  there is no `rebind`.
 
 [Unreleased]: https://github.com/fe-neu/slodl/commits/main

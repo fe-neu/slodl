@@ -87,6 +87,15 @@ Tensor Tensor::operator[](std::size_t index) const {
     );
 }
 
+Tensor Tensor::clone() const {
+    const std::size_t element_count = get_size_for_dims(dims);
+    std::vector<double> values(element_count);
+    for(std::size_t i = 0; i < element_count; i++){
+        values[i] = storage->ptr()[get_offset_for_flat_index(i)];
+    }
+    return Tensor(dims, std::move(values));
+}
+
 double Tensor::item() const {
     if (!dims.empty()) {
         throw std::out_of_range("item() requires a 0-dimensional tensor");

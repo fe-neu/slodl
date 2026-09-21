@@ -42,6 +42,7 @@ void register_tensor(py::module_& m) {
         .def_property_readonly(
             "shape",
             [](const Tensor& self) { return self.shape(); })
+        .def("clone", &Tensor::clone)
         .def(
             "item",
             [](const Tensor& self) { return self.item(); })

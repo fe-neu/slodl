@@ -44,6 +44,8 @@ public:
     Tensor(const Tensor& other) = default;
     Tensor& operator=(const Tensor& other);
 
+    Tensor clone() const;
+
     double item() const;
     Tensor& operator=(double value);
 

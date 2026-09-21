@@ -170,6 +170,27 @@ TEST_CASE("a view keeps its storage alive after the parent is gone", "[tensor]")
     CHECK(row[1].item() == 4.0);
 }
 
+TEST_CASE("clone copies into fresh storage", "[tensor]") {
+    Tensor t({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    Tensor copy = t.clone();
+
+    copy[0][0] = 99.0;
+
+    CHECK(t[0][0].item() == 1.0);
+    CHECK(copy[0][1].item() == 2.0);
+    CHECK(copy.data() != t.data());
+}
+
+TEST_CASE("cloning a view gives a compact tensor of the view's shape", "[tensor]") {
+    Tensor t({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    Tensor row = t[1].clone();
+
+    CHECK(row.shape() == std::vector<std::size_t>{2});
+    CHECK(row.element_strides() == std::vector<std::size_t>{1});
+    CHECK(row[0].item() == 3.0);
+    CHECK(row[1].item() == 4.0);
+}
+
 TEST_CASE("repr prints the values", "[tensor]") {
     CHECK(Tensor({2, 2}, {1.0, 2.0, 3.0, 4.0}).repr() ==
           "Tensor([[1, 2],\n        [3, 4]])");
