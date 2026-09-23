@@ -18,6 +18,8 @@ private:
     std::vector<std::size_t> strides;
     std::vector<std::size_t> dims;
 
+    std::shared_ptr<AutogradMeta> meta;
+
     static std::size_t get_size_for_dims(std::vector<std::size_t> dims);
     static std::vector<std::size_t> get_strides_for_dims(std::vector<std::size_t> dims);
 
@@ -30,8 +32,6 @@ private:
         std::vector<std::size_t> dims
     );
 
-    std::shared_ptr<AutogradMeta> meta;
-    
 public:
     Tensor(std::vector<std::size_t> dims);
     Tensor(std::vector<std::size_t> dims, double init_value);
@@ -56,14 +56,11 @@ public:
 
     std::string repr() const;
 
-    // const std::vector<double>& raw() const;
-
     // Autograd:
     bool requires_grad() const;
     Tensor& requires_grad_(bool flag = true);
     bool is_leaf() const;
     const Tensor* grad() const;
-    void zero_grad();
     void backward();
     Tensor detach() const; 
 };

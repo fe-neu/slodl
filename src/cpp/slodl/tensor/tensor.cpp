@@ -11,18 +11,21 @@ Tensor::Tensor(std::vector<std::size_t> dims)
     : storage(std::make_shared<TensorStorage>(get_size_for_dims(dims), 0.0)),
     start_offset(0),
     strides(get_strides_for_dims(dims)),
-    dims(dims) {}
+    dims(dims),
+    meta(std::make_shared<AutogradMeta>()) {}
 
 Tensor::Tensor(std::vector<std::size_t> dims, double init_value)
     : storage(std::make_shared<TensorStorage>(get_size_for_dims(dims), init_value)),
     start_offset(0),
     strides(get_strides_for_dims(dims)),
-    dims(dims) {}
+    dims(dims),
+    meta(std::make_shared<AutogradMeta>()) {}
 
 Tensor::Tensor(std::vector<std::size_t> dims, std::vector<double> data)
     : start_offset(0),
     strides(get_strides_for_dims(dims)),
-    dims(dims) {
+    dims(dims),
+    meta(std::make_shared<AutogradMeta>()) {
         if(data.size() != get_size_for_dims(dims)) {
             throw std::out_of_range("Given Data does not fit given dimensions");
         }
@@ -37,7 +40,8 @@ Tensor::Tensor(
 ) : storage(std::move(storage)),
     start_offset(start_offset),
     strides(std::move(strides)),
-    dims(std::move(dims)) {}
+    dims(std::move(dims)),
+    meta(std::make_shared<AutogradMeta>()) {}
 
 
 std::size_t Tensor::get_size_for_dims(std::vector<std::size_t> dims) {
@@ -210,3 +214,39 @@ std::string Tensor::repr() const {
     }
     return out + ")";
 }
+
+bool Tensor::requires_grad() const {
+    return meta->requires_grad;
+}
+
+Tensor& Tensor::requires_grad_(bool flag) {
+    if (!is_leaf()) {
+        throw std::invalid_argument(
+            "Can only change requires_grad on a leaf tensor");
+    }
+    meta->requires_grad = flag;
+    return *this;
+}
+
+bool Tensor::is_leaf() const
+{
+    return !meta->grad_fn;
+}
+
+const Tensor* Tensor::grad() const {
+    return meta->grad.get();
+}
+
+void Tensor::backward() {
+    throw std::runtime_error("backward() is not implemented yet");
+}
+
+Tensor Tensor::detach() const {
+    return Tensor(
+        storage,
+        start_offset,
+        strides,
+        dims
+    );
+}
+
