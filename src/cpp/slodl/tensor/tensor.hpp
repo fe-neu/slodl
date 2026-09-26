@@ -38,7 +38,6 @@ public:
     Tensor(std::vector<std::size_t> dims, std::vector<double> data);
     
     const std::vector<std::size_t>& shape() const;
-
     const std::vector<std::size_t>& element_strides() const;
 
     double* data();
@@ -63,6 +62,7 @@ public:
     const Tensor* grad() const;
     void backward();
     Tensor detach() const; 
+    std::shared_ptr<AutogradMeta> autograd_meta() const;
 };
 
 #endif

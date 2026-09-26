@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <optional>
 
 #include "slodl/tensor/tensor.hpp"
 
@@ -15,16 +16,17 @@ struct Edge {
 
 class Node {
     public:
-        std::vector<Tensor> apply(std::vector<Tensor> grad_out);
+        std::vector<std::optional<Tensor>> apply(std::vector<std::optional<Tensor>> grad_out);
         std::vector<Edge> next_edges;
         std::string name;
+        std::size_t num_outputs = 1;
         virtual ~Node() = default;
         Node& operator=(const Node&) = delete;
         Node(const Node&) = delete;
         Node() = default;
     
     protected:
-        virtual std::vector<Tensor> backward(std::vector<Tensor> grad_out) = 0;
+        virtual std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) = 0;
         std::vector<std::vector<std::size_t>> input_shapes;
 };
 

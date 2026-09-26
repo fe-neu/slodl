@@ -250,3 +250,6 @@ Tensor Tensor::detach() const {
     );
 }
 
+std::shared_ptr<AutogradMeta> Tensor::autograd_meta() const {
+    return meta;
+}
