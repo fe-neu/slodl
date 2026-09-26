@@ -205,3 +205,49 @@ TEST_CASE("repr summarises a large tensor and names its shape", "[tensor]") {
     CHECK(repr.find("...") != std::string::npos);
     CHECK(repr.find("shape=[2000]") != std::string::npos);
 }
+
+TEST_CASE("a fresh tensor requires no gradient and is a leaf", "[tensor]") {
+    Tensor t({2, 3});
+
+    CHECK_FALSE(t.requires_grad());
+    CHECK(t.is_leaf());
+    CHECK(t.grad() == nullptr);
+}
+
+TEST_CASE("requires_grad_ toggles the flag and returns the tensor", "[tensor]") {
+    Tensor t({2});
+
+    CHECK(t.requires_grad_().requires_grad());
+    CHECK(t.is_leaf());
+
+    CHECK_FALSE(t.requires_grad_(false).requires_grad());
+}
+
+TEST_CASE("copies of a tensor share one autograd state", "[tensor]") {
+    Tensor t({2});
+    Tensor copy = t;
+
+    t.requires_grad_();
+    CHECK(copy.requires_grad());
+
+    copy.requires_grad_(false);
+    CHECK_FALSE(t.requires_grad());
+
+    CHECK(t.autograd_meta() == copy.autograd_meta());
+}
+
+TEST_CASE("detach shares the data but carries no autograd state", "[tensor]") {
+    Tensor t({2}, {1.0, 2.0});
+    t.requires_grad_();
+
+    Tensor detached = t.detach();
+
+    CHECK_FALSE(detached.requires_grad());
+    CHECK(detached.is_leaf());
+    CHECK(detached.autograd_meta() != t.autograd_meta());
+
+    CHECK(detached.shape() == t.shape());
+    CHECK(detached.data() == t.data());
+    detached[0] = 9.0;
+    CHECK(t[0].item() == 9.0);
+}
