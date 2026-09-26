@@ -7,5 +7,6 @@
 #include <pybind11/pybind11.h>
 
 void register_tensor(pybind11::module_& m);
+void register_autograd(pybind11::module_& m);
 
 #endif

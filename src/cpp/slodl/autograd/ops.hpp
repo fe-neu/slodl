@@ -1,0 +1,49 @@
+#ifndef AUTOGRAD_OPS_HPP
+#define AUTOGRAD_OPS_HPP
+
+#include <memory>
+#include <vector>
+
+#include "slodl/autograd/autograd.hpp"
+#include "slodl/tensor/tensor.hpp"
+
+/**
+ * Whether an operation on these inputs should be recorded for autograd.
+ *
+ * @param inputs  The operation's inputs.
+ * @return True if recording is enabled and at least one input requires a
+ *         gradient. Every op asks this one question, so the rule lives here
+ *         rather than in each of them.
+ */
+bool should_record(const std::vector<Tensor>& inputs);
+
+/**
+ * Makes `result` the recorded output of `node`, and wires `node` to `inputs`.
+ *
+ * @param result  The operation's freshly computed output, which must carry no
+ *                history of its own yet.
+ * @param node    The backward node for this operation.
+ * @param inputs  The operation's inputs, in the order it received them.
+ */
+void set_history(
+    Tensor& result,
+    std::shared_ptr<Node> node,
+    const std::vector<Tensor>& inputs
+);
+
+/**
+ * Adds two tensors, recording the operation for autograd.
+ *
+ * @param a  Left operand.
+ * @param b  Right operand, which must have exactly the shape of `a`.
+ * @return The sum. It requires a gradient, and carries an AddBackward as its
+ *         grad_fn, if either input requires a gradient and recording is
+ *         enabled; otherwise it is a plain leaf.
+ * @throws std::invalid_argument if the two shapes differ.
+ */
+Tensor add(const Tensor& a, const Tensor& b);
+
+/** Adds two tensors; see add(). */
+Tensor operator+(const Tensor& a, const Tensor& b);
+
+#endif

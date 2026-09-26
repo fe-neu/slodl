@@ -310,5 +310,182 @@ class Tensor:
         else:
             self._impl[index] = float(value)
 
+    def __add__(self, other: Tensor) -> Tensor:
+        """Add two tensors element by element.
+
+        Parameters
+        ----------
+        other : Tensor
+            A tensor of this tensor's shape. Shapes are not broadcast
+            against each other yet.
+
+        Returns
+        -------
+        Tensor
+            A new tensor holding the sums, recording the addition if either
+            operand requires a gradient.
+
+        Raises
+        ------
+        ValueError
+            If the shapes differ.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([1, 2]) + Tensor([10, 20])
+        Tensor([11, 22])
+        """
+        if not isinstance(other, Tensor):
+            return NotImplemented
+        return Tensor._from_impl(self._impl + other._impl)
+
+    @property
+    def requires_grad(self) -> bool:
+        """bool : Whether operations on this tensor are recorded for autograd.
+
+        Setting it is only allowed on a leaf: a tensor produced by a recorded
+        operation already inherits its answer from that operation's inputs.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> t = Tensor([1.0, 2.0])
+        >>> t.requires_grad
+        False
+        >>> t.requires_grad = True
+        >>> t.requires_grad
+        True
+        """
+        return self._impl.requires_grad
+
+    @requires_grad.setter
+    def requires_grad(self, flag: bool) -> None:
+        self._impl.requires_grad = bool(flag)
+
+    def requires_grad_(self, flag: bool = True) -> Tensor:
+        """Turn gradient tracking on or off, in place.
+
+        Parameters
+        ----------
+        flag : bool, default True
+            Whether to track gradients.
+
+        Returns
+        -------
+        Tensor
+            This tensor, so the call can be chained.
+
+        Raises
+        ------
+        ValueError
+            If this tensor is not a leaf.
+
+        See Also
+        --------
+        Tensor.requires_grad : The same setting, as a property.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> t = Tensor([1.0, 2.0]).requires_grad_()
+        >>> t.requires_grad
+        True
+        """
+        self._impl.requires_grad_(bool(flag))
+        return self
+
+    @property
+    def is_leaf(self) -> bool:
+        """bool : Whether this tensor was not produced by a recorded operation.
+
+        Tensors you create are leaves, and only leaves accumulate a
+        :attr:`grad`. Results of recorded operations are not.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> a = Tensor([1.0, 2.0]).requires_grad_()
+        >>> a.is_leaf
+        True
+        >>> (a + a).is_leaf
+        False
+        """
+        return self._impl.is_leaf
+
+    @property
+    def grad(self) -> Tensor | None:
+        """Tensor or None : The gradient accumulated by ``backward()``.
+
+        None until a backward pass has accumulated one. Only leaves that
+        require a gradient ever get one.
+
+        Notes
+        -----
+        The returned tensor shares the gradient's storage, so writing to it
+        writes through to the gradient.
+        """
+        gradient = self._impl.grad
+        if gradient is None:
+            return None
+        return Tensor._from_impl(gradient)
+
+    @property
+    def grad_fn(self) -> _core.Node | None:
+        """Node or None : The operation that produced this tensor.
+
+        None for a leaf. Otherwise the node that a backward pass would call
+        to push gradients back to this operation's inputs; it prints as its
+        own name, such as ``<AddBackward>``.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> a = Tensor([1.0, 2.0]).requires_grad_()
+        >>> (a + a).grad_fn
+        <AddBackward>
+        >>> a.grad_fn is None
+        True
+        """
+        return self._impl.grad_fn
+
+    def detach(self) -> Tensor:
+        """Return this tensor's data without its autograd history.
+
+        Returns
+        -------
+        Tensor
+            A tensor sharing this one's storage that requires no gradient and
+            records no history, so gradients do not flow through it. Writes
+            through either tensor are visible in the other.
+
+        See Also
+        --------
+        Tensor.clone : An independent copy, which does not share storage.
+        slodl.no_grad : Stop recording for a whole block instead.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> a = Tensor([1.0, 2.0]).requires_grad_()
+        >>> b = a.detach()
+        >>> b.requires_grad
+        False
+        >>> b[0] = 9.0
+        >>> a[0]
+        9.0
+        """
+        return Tensor._from_impl(self._impl.detach())
+
+    def backward(self) -> None:
+        """Compute gradients back through the graph.
+
+        Raises
+        ------
+        RuntimeError
+            Always, for now: the backward engine is not implemented yet.
+        """
+        self._impl.backward()
+
     def __repr__(self) -> str:
         return repr(self._impl)

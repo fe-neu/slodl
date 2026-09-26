@@ -8,6 +8,8 @@ add_library(slodl_core STATIC
     src/cpp/slodl/tensor/ops.cpp
     src/cpp/slodl/autograd/autograd.cpp
     src/cpp/slodl/autograd/grad_mode.cpp
+    src/cpp/slodl/autograd/functions.cpp
+    src/cpp/slodl/autograd/ops.cpp
     src/cpp/slodl/autograd/engine.cpp
     )
 target_include_directories(slodl_core PUBLIC src/cpp)
@@ -30,6 +32,7 @@ if(SLODL_BUILD_PYTHON)
         src/cpp/slodl/bindings/_core.cpp
         src/cpp/slodl/bindings/conversions.cpp
         src/cpp/slodl/bindings/tensor/tensor.cpp
+        src/cpp/slodl/bindings/autograd/autograd.cpp
     )
     target_link_libraries(_core PRIVATE slodl_core)
 

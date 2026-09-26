@@ -1,10 +1,13 @@
 #include <cstddef>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector <-> list/tuple, for dims and data
 
+#include "slodl/autograd/autograd.hpp"
+#include "slodl/autograd/ops.hpp"
 #include "slodl/bindings/conversions.hpp"
 #include "slodl/bindings/register.hpp"
 #include "slodl/tensor/tensor.hpp"
@@ -82,5 +85,34 @@ void register_tensor(py::module_& m) {
                 view = other;
             },
             py::arg("index"), py::arg("value"))
+        .def("__add__", &add, py::arg("other"))
+        // Autograd. requires_grad is a property, like in PyTorch, and
+        // requires_grad_ returns nothing: the Python layer returns its own
+        // wrapper so that chaining stays on the Python object.
+        .def_property(
+            "requires_grad",
+            &Tensor::requires_grad,
+            [](Tensor& self, bool flag) { self.requires_grad_(flag); })
+        .def(
+            "requires_grad_",
+            [](Tensor& self, bool flag) { self.requires_grad_(flag); },
+            py::arg("flag") = true)
+        .def_property_readonly("is_leaf", &Tensor::is_leaf)
+        // A copy of the gradient, which shares its storage, so writing to it
+        // writes through to the gradient itself.
+        .def_property_readonly(
+            "grad",
+            [](const Tensor& self) -> std::optional<Tensor> {
+                const Tensor* gradient = self.grad();
+                if (gradient == nullptr) {
+                    return std::nullopt;
+                }
+                return *gradient;
+            })
+        .def_property_readonly(
+            "grad_fn",
+            [](const Tensor& self) { return self.autograd_meta()->grad_fn; })
+        .def("detach", &Tensor::detach)
+        .def("backward", &Tensor::backward)
         .def("__repr__", &Tensor::repr);
 }
