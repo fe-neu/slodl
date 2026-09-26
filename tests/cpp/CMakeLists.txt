@@ -14,6 +14,8 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(slodl_cpp_tests
     tensor/test_tensor.cpp
     tensor/test_tensor_storage.cpp
+    tensor/test_ops.cpp
+    autograd/test_autograd.cpp
 )
 target_link_libraries(slodl_cpp_tests
     PRIVATE
@@ -30,3 +32,4 @@ target_link_libraries(slodl_cpp_tests
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 catch_discover_tests(slodl_cpp_tests TEST_PREFIX "tensor/" TEST_SPEC "[tensor]")
+catch_discover_tests(slodl_cpp_tests TEST_PREFIX "autograd/" TEST_SPEC "[autograd]")

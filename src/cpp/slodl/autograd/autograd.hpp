@@ -37,4 +37,16 @@ struct AutogradMeta {
     std::shared_ptr<Tensor> grad;     // filled for leaves by AccumulateGrad
 };
 
+class AccumulateGrad : public Node {
+    public:
+        explicit AccumulateGrad(const Tensor& leaf);
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+
+    private:
+        std::shared_ptr<AutogradMeta> leaf_meta;
+        std::vector<std::size_t> leaf_shape;
+};
+
 #endif

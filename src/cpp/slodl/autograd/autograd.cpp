@@ -2,21 +2,10 @@
 #include <string>
 
 #include "slodl/autograd/autograd.hpp"
+#include "slodl/tensor/ops.hpp"
 
 bool Edge::is_valid() const {
     return node != nullptr;
-}
-
-namespace {
-
-std::string format_shape(const std::vector<std::size_t>& shape) {
-    std::string out = "[";
-    for (std::size_t i = 0; i < shape.size(); i++) {
-        out += (i ? ", " : "") + std::to_string(shape[i]);
-    }
-    return out + "]";
-}
-
 }
 
 std::vector<std::optional<Tensor>> Node::apply(std::vector<std::optional<Tensor>> grad_out) {
@@ -58,4 +47,44 @@ std::vector<std::optional<Tensor>> Node::apply(std::vector<std::optional<Tensor>
         }
     }
     return results;
+}
+
+AccumulateGrad::AccumulateGrad(const Tensor& leaf)
+    : leaf_meta(leaf.autograd_meta()),
+    leaf_shape(leaf.shape()) {
+        name = "AccumulateGrad";
+        if (!leaf.is_leaf()) {
+            throw std::invalid_argument(
+                "AccumulateGrad: the tensor is not a leaf");
+        }
+    }
+
+std::vector<std::optional<Tensor>> AccumulateGrad::backward(
+    std::vector<std::optional<Tensor>> grad_out
+) {
+    if (!grad_out[0].has_value()) {
+        throw std::invalid_argument(
+            "AccumulateGrad: got no gradient to accumulate");
+    }
+    if (grad_out[0]->shape() != leaf_shape) {
+        throw std::invalid_argument(
+            "AccumulateGrad: got a gradient of shape " +
+            format_shape(grad_out[0]->shape()) + ", expected " +
+            format_shape(leaf_shape));
+    }
+
+    Tensor incoming = grad_out[0]->clone();
+
+    if (!leaf_meta->grad) {
+        leaf_meta->grad = std::make_shared<Tensor>(std::move(incoming));
+        return {};
+    }
+
+    double* accumulated = leaf_meta->grad->data();
+    const double* addend = incoming.data();
+    const std::size_t count = element_count(leaf_shape);
+    for (std::size_t i = 0; i < count; i++) {
+        accumulated[i] += addend[i];
+    }
+    return {};
 }

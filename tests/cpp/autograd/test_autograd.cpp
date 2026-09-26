@@ -131,3 +131,81 @@ TEST_CASE("requires_grad_ is rejected on a non-leaf tensor", "[autograd]") {
     REQUIRE_FALSE(t.is_leaf());
     CHECK_THROWS_AS(t.requires_grad_(), std::invalid_argument);
 }
+
+TEST_CASE("AccumulateGrad writes the first gradient to the leaf", "[autograd]") {
+    Tensor leaf({2}, {5.0, 6.0});
+    leaf.requires_grad_();
+    AccumulateGrad accumulator(leaf);
+
+    accumulator.apply({Tensor({2}, {1.0, 2.0})});
+
+    REQUIRE(leaf.grad() != nullptr);
+    CHECK(leaf.grad()->shape() == std::vector<std::size_t>{2});
+    CHECK((*leaf.grad())[0].item() == 1.0);
+    CHECK((*leaf.grad())[1].item() == 2.0);
+}
+
+TEST_CASE("AccumulateGrad sums repeated gradients", "[autograd]") {
+    Tensor leaf({2}, 0.0);
+    leaf.requires_grad_();
+    AccumulateGrad accumulator(leaf);
+
+    accumulator.apply({Tensor({2}, {1.0, 2.0})});
+    accumulator.apply({Tensor({2}, {10.0, 20.0})});
+    accumulator.apply({Tensor({2}, {100.0, 200.0})});
+
+    CHECK((*leaf.grad())[0].item() == 111.0);
+    CHECK((*leaf.grad())[1].item() == 222.0);
+}
+
+TEST_CASE("AccumulateGrad returns no gradients and has no edges", "[autograd]") {
+    Tensor leaf({2}, 0.0);
+    leaf.requires_grad_();
+    AccumulateGrad accumulator(leaf);
+
+    CHECK(accumulator.next_edges.empty());
+    CHECK(accumulator.apply({Tensor({2}, 1.0)}).empty());
+}
+
+TEST_CASE("the accumulated gradient is independent of the incoming tensor",
+          "[autograd]") {
+    Tensor leaf({2}, 0.0);
+    leaf.requires_grad_();
+    AccumulateGrad accumulator(leaf);
+
+    Tensor incoming({2}, {1.0, 2.0});
+    accumulator.apply({incoming});
+    incoming[0] = 99.0;
+
+    CHECK((*leaf.grad())[0].item() == 1.0);
+}
+
+TEST_CASE("AccumulateGrad accumulates a non-contiguous gradient", "[autograd]") {
+    Tensor leaf({2}, 0.0);
+    leaf.requires_grad_();
+    AccumulateGrad accumulator(leaf);
+
+    Tensor matrix({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    accumulator.apply({matrix[1]});
+
+    CHECK((*leaf.grad())[0].item() == 3.0);
+    CHECK((*leaf.grad())[1].item() == 4.0);
+}
+
+TEST_CASE("AccumulateGrad rejects a gradient of the wrong shape", "[autograd]") {
+    Tensor leaf({2}, 0.0);
+    leaf.requires_grad_();
+    AccumulateGrad accumulator(leaf);
+
+    CHECK_THROWS_AS(accumulator.apply({Tensor({3}, 1.0)}),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(accumulator.apply({std::nullopt}), std::invalid_argument);
+    CHECK(leaf.grad() == nullptr);
+}
+
+TEST_CASE("AccumulateGrad rejects a non-leaf tensor", "[autograd]") {
+    Tensor t({2});
+    t.autograd_meta()->grad_fn = std::make_shared<ScriptedNode>();
+
+    CHECK_THROWS_AS(AccumulateGrad(t), std::invalid_argument);
+}
