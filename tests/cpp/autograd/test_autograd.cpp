@@ -26,6 +26,10 @@ struct ScriptedNode : Node {
         next_edges = std::move(edges);
     }
 
+    const std::vector<std::vector<std::size_t>>& shapes() const {
+        return input_shapes;
+    }
+
     std::vector<std::optional<Tensor>> backward(
         std::vector<std::optional<Tensor>> grad_out) override {
         (void)grad_out;
@@ -208,4 +212,104 @@ TEST_CASE("AccumulateGrad rejects a non-leaf tensor", "[autograd]") {
     t.autograd_meta()->grad_fn = std::make_shared<ScriptedNode>();
 
     CHECK_THROWS_AS(AccumulateGrad(t), std::invalid_argument);
+}
+
+TEST_CASE("gradient_edge points a leaf at its accumulator", "[autograd]") {
+    Tensor leaf({2});
+    leaf.requires_grad_();
+
+    Edge edge = gradient_edge(leaf);
+
+    REQUIRE(edge.is_valid());
+    CHECK(edge.input_nr == 0);
+    CHECK(dynamic_cast<AccumulateGrad*>(edge.node.get()) != nullptr);
+}
+
+TEST_CASE("gradient_edge reuses one accumulator per leaf", "[autograd]") {
+    Tensor leaf({2});
+    leaf.requires_grad_();
+
+    Edge first = gradient_edge(leaf);
+    Edge second = gradient_edge(leaf);
+
+    CHECK(first.node == second.node);
+}
+
+TEST_CASE("an accumulator is owned by the graph, not the leaf", "[autograd]") {
+    Tensor leaf({2});
+    leaf.requires_grad_();
+
+    {
+        Edge edge = gradient_edge(leaf);
+        CHECK_FALSE(leaf.autograd_meta()->grad_accumulator.expired());
+    }
+
+    CHECK(leaf.autograd_meta()->grad_accumulator.expired());
+}
+
+TEST_CASE("gradient_edge is invalid for a tensor that needs no gradient",
+          "[autograd]") {
+    Tensor plain({2});
+
+    CHECK_FALSE(gradient_edge(plain).is_valid());
+}
+
+TEST_CASE("gradient_edge points a non-leaf at its grad_fn", "[autograd]") {
+    std::shared_ptr<ScriptedNode> producer = std::make_shared<ScriptedNode>();
+    Tensor result({2});
+    result.autograd_meta()->requires_grad = true;
+    result.autograd_meta()->grad_fn = producer;
+    result.autograd_meta()->output_nr = 2;
+
+    Edge edge = gradient_edge(result);
+
+    CHECK(edge.node == producer);
+    CHECK(edge.input_nr == 2);
+}
+
+TEST_CASE("collect_inputs fills edges and shapes in input order",
+          "[autograd]") {
+    Tensor tracked({2, 2});
+    tracked.requires_grad_();
+    Tensor plain({3});
+
+    ScriptedNode node;
+    node.collect_inputs({tracked, plain});
+
+    REQUIRE(node.next_edges.size() == 2);
+    CHECK(node.next_edges[0].is_valid());
+    CHECK_FALSE(node.next_edges[1].is_valid());
+
+    REQUIRE(node.shapes().size() == 2);
+    CHECK(node.shapes()[0] == std::vector<std::size_t>{2, 2});
+    CHECK(node.shapes()[1] == std::vector<std::size_t>{3});
+}
+
+TEST_CASE("collect_inputs replaces what an earlier call wired up",
+          "[autograd]") {
+    Tensor leaf({2});
+    leaf.requires_grad_();
+
+    ScriptedNode node;
+    node.collect_inputs({leaf, leaf});
+    node.collect_inputs({leaf});
+
+    CHECK(node.next_edges.size() == 1);
+    CHECK(node.shapes().size() == 1);
+}
+
+TEST_CASE("using one leaf twice reaches a single accumulator", "[autograd]") {
+    Tensor leaf({2}, 0.0);
+    leaf.requires_grad_();
+
+    ScriptedNode node;
+    node.collect_inputs({leaf, leaf});
+
+    REQUIRE(node.next_edges[0].node == node.next_edges[1].node);
+
+    node.next_edges[0].node->apply({Tensor({2}, {1.0, 2.0})});
+    node.next_edges[1].node->apply({Tensor({2}, {10.0, 20.0})});
+
+    CHECK((*leaf.grad())[0].item() == 11.0);
+    CHECK((*leaf.grad())[1].item() == 22.0);
 }

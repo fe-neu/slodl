@@ -88,3 +88,35 @@ std::vector<std::optional<Tensor>> AccumulateGrad::backward(
     }
     return {};
 }
+
+Edge gradient_edge(const Tensor& tensor) {
+    const std::shared_ptr<AutogradMeta> meta = tensor.autograd_meta();
+
+    if (meta->grad_fn) {
+        return Edge{meta->grad_fn, meta->output_nr};
+    }
+    if (!meta->requires_grad) {
+        return Edge{};
+    }
+
+    // A leaf's accumulator is created on first use and cached, so that using
+    // the same leaf twice in one graph sums into a single gradient.
+    std::shared_ptr<Node> accumulator = meta->grad_accumulator.lock();
+    if (!accumulator) {
+        accumulator = std::make_shared<AccumulateGrad>(tensor);
+        meta->grad_accumulator = accumulator;
+    }
+    return Edge{accumulator, 0};
+}
+
+void Node::collect_inputs(const std::vector<Tensor>& inputs) {
+    next_edges.clear();
+    input_shapes.clear();
+    next_edges.reserve(inputs.size());
+    input_shapes.reserve(inputs.size());
+
+    for (const Tensor& input : inputs) {
+        next_edges.push_back(gradient_edge(input));
+        input_shapes.push_back(input.shape());
+    }
+}

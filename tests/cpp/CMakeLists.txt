@@ -16,6 +16,7 @@ add_executable(slodl_cpp_tests
     tensor/test_tensor_storage.cpp
     tensor/test_ops.cpp
     autograd/test_autograd.cpp
+    autograd/test_grad_mode.cpp
 )
 target_link_libraries(slodl_cpp_tests
     PRIVATE
