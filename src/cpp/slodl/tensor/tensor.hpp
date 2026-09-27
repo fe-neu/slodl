@@ -99,17 +99,22 @@ public:
     /** Aliases `other`: shares its storage and its autograd state. */
     Tensor(const Tensor& other) = default;
 
+    /** Aliases `other`, like the copy constructor. To write values into this
+     * tensor's existing elements, use copy_(). */
+    Tensor& operator=(const Tensor& other) = default;
+
     /**
-     * Copies `other`'s values into this tensor's existing elements.
+     * Copies `other`'s values into this tensor's existing elements, in place.
      *
-     * Unlike the copy constructor this writes data rather than aliasing, so it
-     * also writes through to anything viewing the same storage. Overlapping
-     * storage is handled. It records no autograd history.
+     * Unlike assignment this writes data rather than aliasing, so it also
+     * writes through to anything viewing the same storage. Overlapping storage
+     * is handled. It records no autograd history.
      *
      * @param other  Tensor of exactly this tensor's shape.
+     * @return This tensor.
      * @throws std::invalid_argument if the shapes differ.
      */
-    Tensor& operator=(const Tensor& other);
+    Tensor& copy_(const Tensor& other);
 
     /**
      * Copies this tensor into fresh, contiguous storage.
@@ -128,12 +133,12 @@ public:
     double item() const;
 
     /**
-     * Writes the single value of a scalar tensor, in place.
+     * Writes the same value to every element, in place.
      *
      * @param value  Value to store.
-     * @throws std::out_of_range if the tensor has any axes.
+     * @return This tensor.
      */
-    Tensor& operator=(double value);
+    Tensor& fill_(double value);
 
     /**
      * Renders the values for display.
@@ -176,7 +181,18 @@ public:
      */
     const Tensor* grad() const;
 
-    /** Not implemented yet: computes gradients back through the graph. */
+    /**
+     * Computes gradients back through the graph that produced this tensor.
+     *
+     * Starts from a gradient of 1 for this tensor and works backwards, adding
+     * into the grad of every leaf that requires one. Gradients accumulate, so
+     * calling this twice doubles them unless the gradients are cleared in
+     * between.
+     *
+     * @throws std::invalid_argument if this tensor has any axes, since a
+     *         starting gradient is only obvious for a scalar, or if it does
+     *         not require a gradient.
+     */
     void backward();
 
     /**

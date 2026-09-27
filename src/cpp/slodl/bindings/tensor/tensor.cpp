@@ -70,19 +70,20 @@ void register_tensor(py::module_& m) {
                 return py::cast(std::move(view));
             },
             py::arg("index"))
-        // t[i] = 5.0 writes a scalar; t[i] = other copies values in.
+        // Both write into the slice: Tensor assignment aliases instead, which
+        // is not what t[i] = x means in Python.
         .def(
             "__setitem__",
             [](Tensor& self, py::ssize_t index, double value) {
                 Tensor view = self[normalize_index(self, index)];
-                view = value;
+                view.fill_(value);
             },
             py::arg("index"), py::arg("value"))
         .def(
             "__setitem__",
             [](Tensor& self, py::ssize_t index, const Tensor& other) {
                 Tensor view = self[normalize_index(self, index)];
-                view = other;
+                view.copy_(other);
             },
             py::arg("index"), py::arg("value"))
         .def("__add__", &add, py::arg("other"))

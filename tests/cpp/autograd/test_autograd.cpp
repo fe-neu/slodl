@@ -179,7 +179,7 @@ TEST_CASE("the accumulated gradient is independent of the incoming tensor",
 
     Tensor incoming({2}, {1.0, 2.0});
     accumulator.apply({incoming});
-    incoming[0] = 99.0;
+    incoming[0].fill_(99.0);
 
     CHECK((*leaf.grad())[0].item() == 1.0);
 }

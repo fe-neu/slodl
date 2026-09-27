@@ -277,15 +277,14 @@ class Tensor:
             Position along the outermost dimension. Negative values count
             back from the end.
         value : float or Tensor
-            A float, which requires that ``self[index]`` is a single element.
-            A tensor, whose values are copied into that slice; it must have
-            the same shape as the slice.
+            A float, which is written to every element of the slice. A
+            tensor, whose values are copied into the slice; it must have the
+            same shape as the slice.
 
         Raises
         ------
         IndexError
-            If ``index`` is out of range, or a float is assigned to a slice
-            that is not a single element.
+            If ``index`` is out of range.
         ValueError
             If ``value`` is a tensor whose shape differs from the slice.
 
@@ -304,6 +303,12 @@ class Tensor:
         >>> t[1] = t[0]
         >>> [t[1][j] for j in range(2)]
         [9.0, 2.0]
+
+        A float fills the whole slice:
+
+        >>> t[0] = 7.0
+        >>> [t[0][j] for j in range(2)]
+        [7.0, 7.0]
         """
         if isinstance(value, Tensor):
             self._impl[index] = value._impl
@@ -478,12 +483,41 @@ class Tensor:
         return Tensor._from_impl(self._impl.detach())
 
     def backward(self) -> None:
-        """Compute gradients back through the graph.
+        """Compute gradients back through the graph that produced this tensor.
+
+        Starts from a gradient of 1 for this tensor and works backwards,
+        adding into the :attr:`grad` of every leaf that requires one.
 
         Raises
         ------
-        RuntimeError
-            Always, for now: the backward engine is not implemented yet.
+        ValueError
+            If this tensor has any dimensions, since a starting gradient is
+            only obvious for a scalar, or if it does not require a gradient.
+
+        See Also
+        --------
+        Tensor.grad : Where the results end up.
+
+        Notes
+        -----
+        Gradients accumulate, so calling this twice without clearing
+        :attr:`grad` in between adds to what is already there.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> a = Tensor(2.0).requires_grad_()
+        >>> b = Tensor(3.0).requires_grad_()
+        >>> (a + b).backward()
+        >>> a.grad
+        Tensor(1)
+
+        A tensor used twice collects a gradient from each use:
+
+        >>> c = Tensor(1.0).requires_grad_()
+        >>> (c + c).backward()
+        >>> c.grad
+        Tensor(2)
         """
         self._impl.backward()
 

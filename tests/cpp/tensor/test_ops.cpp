@@ -41,7 +41,7 @@ TEST_CASE("add_kernel returns a fresh contiguous tensor", "[tensor]") {
     CHECK(sum.data() != a.data());
     CHECK(sum.data() != b.data());
 
-    a[0][0] = 100.0;
+    a[0][0].fill_(100.0);
     CHECK(sum[0][0].item() == 3.0);
 }
 

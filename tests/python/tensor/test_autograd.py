@@ -49,8 +49,57 @@ def test_detach_drops_the_history_but_shares_the_data():
     assert a[0] == 9.0
 
 
-def test_backward_is_not_implemented_yet():
-    a = Tensor([1.0]).requires_grad_()
+def test_backward_fills_the_gradients_of_the_inputs():
+    a = Tensor(2.0).requires_grad_()
+    b = Tensor(3.0).requires_grad_()
 
-    with pytest.raises(RuntimeError):
-        (a + a).backward()
+    (a + b).backward()
+
+    assert a.grad is not None
+    assert a.grad.item() == 1.0
+    assert b.grad.item() == 1.0
+
+
+def test_backward_sums_the_gradient_of_a_tensor_used_twice():
+    a = Tensor(2.0).requires_grad_()
+
+    (a + a).backward()
+
+    assert a.grad.item() == 2.0
+
+
+def test_backward_follows_a_chain():
+    a = Tensor(1.0).requires_grad_()
+    b = Tensor(2.0).requires_grad_()
+
+    (a + b + a).backward()
+
+    assert a.grad.item() == 2.0
+    assert b.grad.item() == 1.0
+
+
+def test_gradients_accumulate_across_passes():
+    a = Tensor(1.0).requires_grad_()
+
+    (a + a).backward()
+    (a + a).backward()
+
+    assert a.grad.item() == 4.0
+
+
+def test_backward_needs_a_scalar_that_requires_a_gradient():
+    vector_valued = Tensor([1.0, 2.0]).requires_grad_()
+    with pytest.raises(ValueError):
+        (vector_valued + vector_valued).backward()
+
+    with pytest.raises(ValueError):
+        Tensor(1.0).backward()
+
+
+def test_gradients_carry_no_history_of_their_own():
+    a = Tensor(1.0).requires_grad_()
+
+    (a + a).backward()
+
+    assert a.grad.requires_grad is False
+    assert a.grad.grad_fn is None

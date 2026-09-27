@@ -18,6 +18,7 @@ add_executable(slodl_cpp_tests
     autograd/test_autograd.cpp
     autograd/test_grad_mode.cpp
     autograd/test_ops.cpp
+    autograd/test_engine.cpp
 )
 target_link_libraries(slodl_cpp_tests
     PRIVATE

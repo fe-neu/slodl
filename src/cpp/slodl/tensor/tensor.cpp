@@ -6,6 +6,7 @@
 #include "slodl/tensor/tensor.hpp"
 #include "slodl/tensor/tensor_storage.hpp"
 #include "slodl/autograd/autograd.hpp"
+#include "slodl/autograd/engine.hpp"
 
 Tensor::Tensor(std::vector<std::size_t> dims)
     : storage(std::make_shared<TensorStorage>(get_size_for_dims(dims), 0.0)),
@@ -108,7 +109,7 @@ double Tensor::item() const {
     return storage->ptr()[start_offset];
 }
 
-Tensor& Tensor::operator=(const Tensor& other) {
+Tensor& Tensor::copy_(const Tensor& other) {
     if (this == &other) {
         return *this;
     }
@@ -137,11 +138,12 @@ Tensor& Tensor::operator=(const Tensor& other) {
     return *this;
 }
 
-Tensor& Tensor::operator=(double value) {
-    if (!dims.empty()) {
-        throw std::out_of_range("Cannot assign a scalar to a non-scalar tensor");
+Tensor& Tensor::fill_(double value) {
+    const std::size_t element_count = get_size_for_dims(dims);
+    double* elements = storage->ptr();
+    for(std::size_t i = 0; i < element_count; i++){
+        elements[get_offset_for_flat_index(i)] = value;
     }
-    storage->ptr()[start_offset] = value;
     return *this;
 }
 
@@ -238,7 +240,22 @@ const Tensor* Tensor::grad() const {
 }
 
 void Tensor::backward() {
-    throw std::runtime_error("backward() is not implemented yet");
+    if (!dims.empty()) {
+        throw std::invalid_argument(
+            "backward() requires a 0-dimensional tensor");
+    }
+    if (!requires_grad()) {
+        throw std::invalid_argument(
+            "backward() requires a tensor that requires a gradient");
+    }
+
+    // The starting gradient of a tensor with respect to itself is 1.
+    const Tensor seed(dims, 1.0);
+
+    // Via an edge rather than grad_fn directly, so that a scalar leaf
+    // accumulates into its own grad instead of finding no graph at all.
+    const Edge entry = gradient_edge(*this);
+    run_backward(entry.node, seed);
 }
 
 Tensor Tensor::detach() const {

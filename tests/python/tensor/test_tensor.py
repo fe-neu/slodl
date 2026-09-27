@@ -187,11 +187,13 @@ def test_assigning_a_float_writes_through():
     assert t[0][0] == 0.0
 
 
-def test_a_float_cannot_be_assigned_to_a_slice():
+def test_assigning_a_float_to_a_slice_fills_it():
     t = zeros([2, 2])
 
-    with pytest.raises(IndexError):
-        t[0] = 1.0
+    t[0] = 1.0
+
+    assert [t[0][j] for j in range(2)] == [1.0, 1.0]
+    assert [t[1][j] for j in range(2)] == [0.0, 0.0]
 
 
 def test_assigning_a_tensor_copies_values():
