@@ -48,4 +48,25 @@ class MulBackward : public Node {
         Tensor b;
 };
 
+/**
+ * Backward of summing every element.
+ *
+ * A sum is linear in each element: nudging one element moves the total by the
+ * same amount, so every partial derivative is 1 and each element's gradient is
+ * the incoming gradient itself. Since the sum is a scalar, that gradient is a
+ * single number, copied into every position of a tensor shaped like the input.
+ *
+ * A reduction forward is an expansion backward, which is the mirror of
+ * broadcasting, where a copy forward becomes a sum backward.
+ *
+ * Nothing from the forward pass is needed beyond the input's shape, which
+ * Node already records in input_shapes, so this node is stateless.
+ */
+class SumBackward : public Node {
+    public:
+        SumBackward();
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+};
 #endif

@@ -377,6 +377,44 @@ class Tensor:
             return NotImplemented
         return Tensor._from_impl(self._impl * other._impl)
 
+    def sum(self) -> Tensor:
+        """Add up every element of this tensor.
+
+        This is how a tensor becomes the single value that :meth:`backward`
+        can start from.
+
+        Returns
+        -------
+        Tensor
+            A 0-dimensional tensor holding the total, zero for an empty
+            tensor. It requires a gradient, and records the sum, if this
+            tensor does.
+
+        See Also
+        --------
+        slodl.sum : The same operation, spelled ``slodl.sum(a)``.
+
+        Notes
+        -----
+        Every element contributes to the total equally, so a backward pass
+        gives each one the same gradient. Python's built-in ``sum`` does not
+        work on a tensor; use this instead.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([[1, 2], [3, 4]]).sum()
+        Tensor(10)
+
+        Each element's gradient is the gradient of the total:
+
+        >>> a = Tensor([1.0, 2.0, 3.0]).requires_grad_()
+        >>> a.sum().backward()
+        >>> a.grad
+        Tensor([1, 1, 1])
+        """
+        return Tensor._from_impl(self._impl.sum())
+
     @property
     def requires_grad(self) -> bool:
         """bool : Whether operations on this tensor are recorded for autograd.

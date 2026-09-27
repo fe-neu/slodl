@@ -1,7 +1,7 @@
 """slodl: a small deep-learning package backed by a compiled C++ core."""
 
 from slodl.autograd import is_grad_enabled, no_grad
-from slodl.tensor import Tensor, add, full, mul, ones, zeros
+from slodl.tensor import Tensor, add, full, mul, ones, sum, zeros
 
 from importlib.metadata import PackageNotFoundError, version
 
@@ -14,6 +14,7 @@ __all__ = [
     "mul",
     "no_grad",
     "ones",
+    "sum",
     "zeros",
     ]
 

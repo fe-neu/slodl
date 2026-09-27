@@ -88,3 +88,50 @@ def mul(a: Tensor, b: Tensor) -> Tensor:
     Tensor(3)
     """
     return Tensor._from_impl(_core.mul(a._impl, b._impl))
+
+
+def sum(a: Tensor) -> Tensor:
+    """Add up every element of a tensor.
+
+    This is how a tensor becomes the single value that
+    :meth:`slodl.Tensor.backward` can start from.
+
+    Parameters
+    ----------
+    a : Tensor
+        Tensor to add up, which may be a view.
+
+    Returns
+    -------
+    Tensor
+        A 0-dimensional tensor holding the total, zero for an empty tensor.
+        It requires a gradient, and records the sum, if ``a`` does.
+
+    See Also
+    --------
+    slodl.Tensor.sum : The same operation, spelled ``a.sum()``.
+
+    Notes
+    -----
+    Every element contributes to the total equally, so a backward pass gives
+    each one the same gradient. Python's built-in ``sum`` does not work on a
+    tensor; use this instead.
+
+    Examples
+    --------
+    >>> import slodl
+    >>> from slodl import Tensor
+    >>> slodl.sum(Tensor([[1, 2], [3, 4]]))
+    Tensor(10)
+
+    Summing is what makes a non-scalar computation differentiable:
+
+    >>> a = Tensor([2.0, 3.0]).requires_grad_()
+    >>> b = Tensor([10.0, 20.0]).requires_grad_()
+    >>> slodl.sum(a * b).backward()
+    >>> a.grad
+    Tensor([10, 20])
+    >>> b.grad
+    Tensor([2, 3])
+    """
+    return Tensor._from_impl(_core.sum(a._impl))

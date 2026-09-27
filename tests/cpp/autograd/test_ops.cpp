@@ -227,3 +227,74 @@ TEST_CASE("mixing add and mul follows the product rule", "[autograd]") {
     CHECK(a.grad()->item() == 9.0);
     CHECK(b.grad()->item() == 2.0);
 }
+
+TEST_CASE("sum adds up every element", "[autograd]") {
+    Tensor total = sum(Tensor({2, 2}, {1.0, 2.0, 3.0, 4.0}));
+
+    CHECK(total.shape().empty());
+    CHECK(total.item() == 10.0);
+}
+
+TEST_CASE("sum records a graph when its input requires a gradient",
+          "[autograd]") {
+    Tensor a({2}, 1.0);
+    a.requires_grad_();
+
+    Tensor total = sum(a);
+
+    REQUIRE(total.autograd_meta()->grad_fn != nullptr);
+    CHECK(total.autograd_meta()->grad_fn->name == "SumBackward");
+    CHECK(total.autograd_meta()->grad_fn->next_edges.size() == 1);
+}
+
+TEST_CASE("backward through sum gives every element a gradient of one",
+          "[autograd]") {
+    Tensor a({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    a.requires_grad_();
+
+    sum(a).backward();
+
+    REQUIRE(a.grad() != nullptr);
+    CHECK(a.grad()->shape() == std::vector<std::size_t>{2, 2});
+    CHECK((*a.grad())[0][0].item() == 1.0);
+    CHECK((*a.grad())[1][1].item() == 1.0);
+}
+
+TEST_CASE("sum expands whatever gradient it receives", "[autograd]") {
+    Tensor a({3}, 1.0);
+    a.requires_grad_();
+
+    const std::shared_ptr<Node> node = sum(a).autograd_meta()->grad_fn;
+    std::vector<std::optional<Tensor>> gradients = node->apply({Tensor({}, 2.0)});
+
+    REQUIRE(gradients.size() == 1);
+    CHECK((*gradients[0]).shape() == std::vector<std::size_t>{3});
+    CHECK((*gradients[0])[0].item() == 2.0);
+    CHECK((*gradients[0])[2].item() == 2.0);
+}
+
+TEST_CASE("sum makes a non-scalar graph differentiable", "[autograd]") {
+    Tensor a({2}, {2.0, 3.0});
+    Tensor b({2}, {10.0, 20.0});
+    a.requires_grad_();
+    b.requires_grad_();
+
+    // sum(a * b), so d/da = b and d/db = a.
+    sum(mul(a, b)).backward();
+
+    CHECK((*a.grad())[0].item() == 10.0);
+    CHECK((*a.grad())[1].item() == 20.0);
+    CHECK((*b.grad())[0].item() == 2.0);
+    CHECK((*b.grad())[1].item() == 3.0);
+}
+
+TEST_CASE("sum of a view gradient reaches only the view's elements",
+          "[autograd]") {
+    Tensor a({2}, {1.0, 2.0});
+    a.requires_grad_();
+
+    sum(add(a, a)).backward();
+
+    CHECK((*a.grad())[0].item() == 2.0);
+    CHECK((*a.grad())[1].item() == 2.0);
+}

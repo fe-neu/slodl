@@ -128,3 +128,45 @@ TEST_CASE("elementwise runs any operation", "[tensor]") {
     CHECK(product[2].item() == 90.0);
     CHECK(difference[2].item() == 27.0);
 }
+
+TEST_CASE("reduce_all folds every element", "[tensor]") {
+    Tensor t({2, 2}, {1.0, 2.0, 3.0, 4.0});
+
+    CHECK(reduce_all(t, 0.0, [](double acc, double x) { return acc + x; }) == 10.0);
+    CHECK(reduce_all(t, 1.0, [](double acc, double x) { return acc * x; }) == 24.0);
+}
+
+TEST_CASE("reduce_all walks a view by its strides", "[tensor]") {
+    Tensor t({3, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    CHECK(reduce_all(t[1], 0.0, [](double acc, double x) { return acc + x; }) == 7.0);
+}
+
+TEST_CASE("reduce_all returns the initial value for an empty tensor",
+          "[tensor]") {
+    CHECK(reduce_all(Tensor({0}), 5.0, [](double acc, double x) {
+        return acc + x;
+    }) == 5.0);
+}
+
+TEST_CASE("sum_kernel adds up every element", "[tensor]") {
+    Tensor total = sum_kernel(Tensor({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0}));
+
+    CHECK(total.shape().empty());
+    CHECK(total.item() == 21.0);
+}
+
+TEST_CASE("sum_kernel handles views, scalars and empty tensors", "[tensor]") {
+    Tensor matrix({2, 2}, {1.0, 2.0, 3.0, 4.0});
+
+    CHECK(sum_kernel(matrix[1]).item() == 7.0);
+    CHECK(sum_kernel(Tensor({}, 5.0)).item() == 5.0);
+    CHECK(sum_kernel(Tensor({0})).item() == 0.0);
+}
+
+TEST_CASE("sum_kernel records no autograd history", "[tensor]") {
+    Tensor t({2}, 1.0);
+    t.requires_grad_();
+
+    CHECK_FALSE(sum_kernel(t).requires_grad());
+}

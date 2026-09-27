@@ -55,3 +55,12 @@ Tensor mul(const Tensor& a, const Tensor& b) {
 Tensor operator*(const Tensor& a, const Tensor& b) {
     return mul(a, b);
 }
+
+Tensor sum(const Tensor& a) {
+    Tensor result = sum_kernel(a);
+
+    if (should_record({a})) {
+        set_history(result, std::make_shared<SumBackward>(), {a});
+    }
+    return result;
+}

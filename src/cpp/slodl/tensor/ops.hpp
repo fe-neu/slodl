@@ -94,6 +94,52 @@ Tensor elementwise(const Tensor& a, const Tensor& b, Operation operation) {
 }
 
 /**
+ * Folds every logical element of a tensor into a single value.
+ *
+ * Walks the tensor by its strides, like elementwise(), so a view reduces over
+ * the elements it actually describes.
+ *
+ * @param a          Tensor to reduce.
+ * @param initial    Value the fold starts from, and the result for an empty
+ *                   tensor.
+ * @param operation  Callable invoked as operation(accumulated, element),
+ *                   returning the new accumulated value.
+ * @return The accumulated value.
+ */
+template <typename Operation>
+double reduce_all(const Tensor& a, double initial, Operation operation) {
+    const std::vector<std::size_t>& dims = a.shape();
+    const std::size_t count = element_count(dims);
+
+    double accumulated = initial;
+    if (count == 0) {
+        return accumulated;
+    }
+
+    const double* elements = a.data();
+    const std::vector<std::size_t>& strides = a.element_strides();
+
+    // The same odometer as elementwise(), over one tensor instead of two.
+    std::vector<std::size_t> counter(dims.size(), 0);
+    std::size_t offset = 0;
+
+    for (std::size_t i = 0; i < count; i++) {
+        accumulated = operation(accumulated, elements[offset]);
+
+        for (std::size_t axis = dims.size(); axis-- > 0;) {
+            counter[axis]++;
+            offset += strides[axis];
+            if (counter[axis] < dims[axis]) {
+                break;
+            }
+            counter[axis] = 0;
+            offset -= dims[axis] * strides[axis];
+        }
+    }
+    return accumulated;
+}
+
+/**
  * Adds two tensors element by element.
  *
  * A kernel: it records no autograd history, so the result is a leaf even when
@@ -118,4 +164,15 @@ Tensor add_kernel(const Tensor& a, const Tensor& b);
  * @throws std::invalid_argument if the two shapes differ.
  */
 Tensor mul_kernel(const Tensor& a, const Tensor& b);
+
+/**
+ * Adds up every element of a tensor.
+ *
+ * A kernel: it records no autograd history, so the result is a leaf even when
+ * the input requires a gradient. Use the recording `sum` for that.
+ *
+ * @param a  Tensor to add up, which may be a view.
+ * @return A 0-dimensional tensor holding the total; zero for an empty tensor.
+ */
+Tensor sum_kernel(const Tensor& a);
 #endif

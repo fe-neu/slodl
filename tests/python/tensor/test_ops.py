@@ -94,3 +94,51 @@ def test_backward_through_mul_uses_the_other_operand():
 def test_multiplying_by_a_float_is_a_type_error():
     with pytest.raises(TypeError):
         Tensor([1.0]) * 2.0
+
+
+def test_sum_adds_up_every_element():
+    total = Tensor([[1.0, 2.0], [3.0, 4.0]]).sum()
+
+    assert total.shape == []
+    assert total.item() == 10.0
+
+
+def test_the_free_function_sums_like_the_method():
+    t = Tensor([1.0, 2.0, 3.0])
+
+    assert slodl.sum(t).item() == t.sum().item() == 6.0
+
+
+def test_sum_of_a_view():
+    t = Tensor([[1.0, 2.0], [3.0, 4.0]])
+
+    assert t[1].sum().item() == 7.0
+
+
+def test_sum_records_when_its_input_requires_grad():
+    a = Tensor([1.0, 2.0]).requires_grad_()
+
+    total = a.sum()
+
+    assert total.requires_grad is True
+    assert total.grad_fn.name == "SumBackward"
+
+
+def test_backward_through_sum_gives_every_element_one():
+    a = Tensor([[1.0, 2.0], [3.0, 4.0]]).requires_grad_()
+
+    a.sum().backward()
+
+    assert a.grad.shape == [2, 2]
+    assert [a.grad[0][j] for j in range(2)] == [1.0, 1.0]
+    assert [a.grad[1][j] for j in range(2)] == [1.0, 1.0]
+
+
+def test_sum_makes_a_vector_computation_differentiable():
+    a = Tensor([2.0, 3.0]).requires_grad_()
+    b = Tensor([10.0, 20.0]).requires_grad_()
+
+    (a * b).sum().backward()
+
+    assert [a.grad[i] for i in range(2)] == [10.0, 20.0]
+    assert [b.grad[i] for i in range(2)] == [2.0, 3.0]

@@ -27,3 +27,10 @@ Tensor mul_kernel(const Tensor& a, const Tensor& b) {
         return left * right;
     });
 }
+
+Tensor sum_kernel(const Tensor& a) {
+    const double total = reduce_all(a, 0.0, [](double accumulated, double element) {
+        return accumulated + element;
+    });
+    return Tensor({}, total);
+}

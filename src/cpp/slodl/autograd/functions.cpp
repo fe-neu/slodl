@@ -19,3 +19,12 @@ std::vector<std::optional<Tensor>> MulBackward::backward(
 
     return {mul_kernel(*grad_out[0], b), mul_kernel(*grad_out[0], a)};
 }
+
+SumBackward::SumBackward() : Node("SumBackward") {}
+
+std::vector<std::optional<Tensor>> SumBackward::backward(
+    std::vector<std::optional<Tensor>> grad_out
+) {
+
+    return {Tensor(input_shapes[0], grad_out[0]->item())};
+}

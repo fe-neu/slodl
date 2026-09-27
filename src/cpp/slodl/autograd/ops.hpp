@@ -51,13 +51,26 @@ Tensor operator+(const Tensor& a, const Tensor& b);
  *
  * @param a  Left operand.
  * @param b  Right operand, which must have exactly the shape of `a`.
- * @return The Hadamard product. It requires a gradient, and carries an MulBackward as its
+ * @return The Hadamard product. It requires a gradient, and carries a MulBackward as its
  *         grad_fn, if either input requires a gradient and recording is
  *         enabled; otherwise it is a plain leaf.
  * @throws std::invalid_argument if the two shapes differ.
  */
 Tensor mul(const Tensor& a, const Tensor& b);
 
-/** Calculates Hadamrd product of two tensors; see mul(). */
+/** Calculates Hadamard product of two tensors; see mul(). */
 Tensor operator*(const Tensor& a, const Tensor& b);
+
+/**
+ * Adds up every element of a tensor, recording the operation for autograd.
+ *
+ * This is how a tensor becomes the scalar that backward() can start from.
+ *
+ * @param a  Tensor to add up, which may be a view.
+ * @return A 0-dimensional tensor holding the total. It requires a gradient,
+ *         and carries a SumBackward as its grad_fn, if the input requires a
+ *         gradient and recording is enabled; otherwise it is a plain leaf.
+ */
+Tensor sum(const Tensor& a);
+
 #endif
