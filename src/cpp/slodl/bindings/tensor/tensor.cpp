@@ -87,6 +87,7 @@ void register_tensor(py::module_& m) {
             },
             py::arg("index"), py::arg("value"))
         .def("__add__", &add, py::arg("other"))
+        .def("__mul__", &mul, py::arg("other"))
         // Autograd. requires_grad is a property, like in PyTorch, and
         // requires_grad_ returns nothing: the Python layer returns its own
         // wrapper so that chaining stays on the Python object.

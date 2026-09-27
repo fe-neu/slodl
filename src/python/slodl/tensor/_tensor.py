@@ -345,6 +345,38 @@ class Tensor:
             return NotImplemented
         return Tensor._from_impl(self._impl + other._impl)
 
+    def __mul__(self, other: Tensor) -> Tensor:
+        """Multiply two tensors element by element.
+
+        This is the element-wise (Hadamard) product, not a matrix product.
+
+        Parameters
+        ----------
+        other : Tensor
+            A tensor of this tensor's shape. Shapes are not broadcast
+            against each other yet, so a plain number is not accepted.
+
+        Returns
+        -------
+        Tensor
+            A new tensor holding the products, recording the multiplication
+            if either operand requires a gradient.
+
+        Raises
+        ------
+        ValueError
+            If the shapes differ.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([2, 3]) * Tensor([10, 20])
+        Tensor([20, 60])
+        """
+        if not isinstance(other, Tensor):
+            return NotImplemented
+        return Tensor._from_impl(self._impl * other._impl)
+
     @property
     def requires_grad(self) -> bool:
         """bool : Whether operations on this tensor are recorded for autograd.

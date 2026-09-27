@@ -106,4 +106,16 @@ Tensor elementwise(const Tensor& a, const Tensor& b, Operation operation) {
  */
 Tensor add_kernel(const Tensor& a, const Tensor& b);
 
+/**
+ * Calculates Hadamard Product of two tensors element by element.
+ *
+ * A kernel: it records no autograd history, so the result is a leaf even when
+ * the inputs require gradients. Use the recording `mul` for that.
+ *
+ * @param a  Left operand.
+ * @param b  Right operand, which must have exactly the shape of `a`.
+ * @return A newly allocated, contiguous tensor holding the Hadamard product.
+ * @throws std::invalid_argument if the two shapes differ.
+ */
+Tensor mul_kernel(const Tensor& a, const Tensor& b);
 #endif

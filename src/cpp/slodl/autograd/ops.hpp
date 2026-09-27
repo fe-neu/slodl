@@ -46,4 +46,18 @@ Tensor add(const Tensor& a, const Tensor& b);
 /** Adds two tensors; see add(). */
 Tensor operator+(const Tensor& a, const Tensor& b);
 
+/**
+ * Calculates the Hadamard product of two tensors, recording the operation for autograd.
+ *
+ * @param a  Left operand.
+ * @param b  Right operand, which must have exactly the shape of `a`.
+ * @return The Hadamard product. It requires a gradient, and carries an MulBackward as its
+ *         grad_fn, if either input requires a gradient and recording is
+ *         enabled; otherwise it is a plain leaf.
+ * @throws std::invalid_argument if the two shapes differ.
+ */
+Tensor mul(const Tensor& a, const Tensor& b);
+
+/** Calculates Hadamrd product of two tensors; see mul(). */
+Tensor operator*(const Tensor& a, const Tensor& b);
 #endif

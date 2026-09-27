@@ -43,3 +43,48 @@ def add(a: Tensor, b: Tensor) -> Tensor:
     <AddBackward>
     """
     return Tensor._from_impl(_core.add(a._impl, b._impl))
+
+
+def mul(a: Tensor, b: Tensor) -> Tensor:
+    """Multiply two tensors element by element.
+
+    This is the element-wise (Hadamard) product, not a matrix product.
+
+    Parameters
+    ----------
+    a, b : Tensor
+        Tensors of the same shape. Shapes are not broadcast against each
+        other yet, so multiplying by a single number is not supported.
+
+    Returns
+    -------
+    Tensor
+        A new tensor holding the products. It requires a gradient, and
+        records the multiplication, if either input requires one.
+
+    Raises
+    ------
+    ValueError
+        If the two shapes differ.
+
+    See Also
+    --------
+    slodl.Tensor.__mul__ : The same operation, spelled ``a * b``.
+
+    Examples
+    --------
+    >>> from slodl import Tensor, mul
+    >>> mul(Tensor([2, 3]), Tensor([10, 20]))
+    Tensor([20, 60])
+
+    Each input's gradient is the other input's value:
+
+    >>> a = Tensor(3.0).requires_grad_()
+    >>> b = Tensor(4.0).requires_grad_()
+    >>> (a * b).backward()
+    >>> a.grad
+    Tensor(4)
+    >>> b.grad
+    Tensor(3)
+    """
+    return Tensor._from_impl(_core.mul(a._impl, b._impl))

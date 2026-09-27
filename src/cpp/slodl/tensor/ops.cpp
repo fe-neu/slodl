@@ -21,3 +21,9 @@ Tensor add_kernel(const Tensor& a, const Tensor& b) {
         return left + right;
     });
 }
+
+Tensor mul_kernel(const Tensor& a, const Tensor& b) {
+    return elementwise(a, b, [](double left, double right) {
+        return left * right;
+    });
+}

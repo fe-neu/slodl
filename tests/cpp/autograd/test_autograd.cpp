@@ -18,7 +18,7 @@ struct ScriptedNode : Node {
     std::vector<std::optional<Tensor>> gradients;
     bool ran = false;
 
-    ScriptedNode() { name = "ScriptedNode"; }
+    ScriptedNode() : Node("ScriptedNode") {}
 
     void set_inputs(std::vector<std::vector<std::size_t>> shapes,
                     std::vector<Edge> edges) {

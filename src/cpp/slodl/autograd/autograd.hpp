@@ -36,8 +36,8 @@ class Node {
         virtual ~Node() = default;
         Node& operator=(const Node&) = delete;
         Node(const Node&) = delete;
-        Node() = default;
-    
+        explicit Node(std::string name);
+
     protected:
         virtual std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) = 0;
         std::vector<std::vector<std::size_t>> input_shapes;

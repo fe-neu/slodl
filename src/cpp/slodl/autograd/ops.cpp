@@ -42,3 +42,16 @@ Tensor add(const Tensor& a, const Tensor& b) {
 Tensor operator+(const Tensor& a, const Tensor& b) {
     return add(a, b);
 }
+
+Tensor mul(const Tensor& a, const Tensor& b) {
+    Tensor result = mul_kernel(a, b);
+
+    if (should_record({a, b})) {
+        set_history(result, std::make_shared<MulBackward>(a, b), {a, b});
+    }
+    return result;
+}
+
+Tensor operator*(const Tensor& a, const Tensor& b) {
+    return mul(a, b);
+}

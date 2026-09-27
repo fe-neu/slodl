@@ -130,3 +130,100 @@ TEST_CASE("a discarded graph frees its nodes", "[autograd]") {
 
     CHECK(a.autograd_meta()->grad_accumulator.expired());
 }
+
+TEST_CASE("mul multiplies element by element", "[autograd]") {
+    Tensor product = mul(Tensor({2}, {2.0, 3.0}), Tensor({2}, {10.0, 20.0}));
+
+    CHECK(product[0].item() == 20.0);
+    CHECK(product[1].item() == 60.0);
+}
+
+TEST_CASE("mul records a graph when an input requires a gradient",
+          "[autograd]") {
+    Tensor a({2}, 2.0);
+    a.requires_grad_();
+
+    Tensor product = mul(a, Tensor({2}, 3.0));
+
+    REQUIRE(product.autograd_meta()->grad_fn != nullptr);
+    CHECK(product.autograd_meta()->grad_fn->name == "MulBackward");
+}
+
+TEST_CASE("operator* multiplies like mul", "[autograd]") {
+    Tensor a({2}, 2.0);
+    a.requires_grad_();
+
+    Tensor product = a * Tensor({2}, 4.0);
+
+    CHECK(product[0].item() == 8.0);
+    CHECK(product.autograd_meta()->grad_fn->name == "MulBackward");
+}
+
+TEST_CASE("MulBackward scales the gradient by the opposite input",
+          "[autograd]") {
+    Tensor a({2}, {2.0, 3.0});
+    Tensor b({2}, {10.0, 20.0});
+    a.requires_grad_();
+    b.requires_grad_();
+
+    const std::shared_ptr<Node> node = mul(a, b).autograd_meta()->grad_fn;
+    std::vector<std::optional<Tensor>> gradients =
+        node->apply({Tensor({2}, {1.0, 2.0})});
+
+    REQUIRE(gradients.size() == 2);
+    CHECK((*gradients[0])[0].item() == 10.0);   // 1 * b[0]
+    CHECK((*gradients[0])[1].item() == 40.0);   // 2 * b[1]
+    CHECK((*gradients[1])[0].item() == 2.0);    // 1 * a[0]
+    CHECK((*gradients[1])[1].item() == 6.0);    // 2 * a[1]
+}
+
+TEST_CASE("backward through mul gives each input the other's value",
+          "[autograd]") {
+    Tensor a({}, 3.0);
+    Tensor b({}, 4.0);
+    a.requires_grad_();
+    b.requires_grad_();
+
+    mul(a, b).backward();
+
+    CHECK(a.grad()->item() == 4.0);
+    CHECK(b.grad()->item() == 3.0);
+}
+
+TEST_CASE("mul survives the inputs going out of scope", "[autograd]") {
+    Tensor a({}, 3.0);
+    a.requires_grad_();
+
+    Tensor product = mul(a, Tensor({}, 4.0));
+    product.backward();
+
+    CHECK(a.grad()->item() == 4.0);
+}
+
+TEST_CASE("a saved input carries no history", "[autograd]") {
+    Tensor a({}, 3.0);
+    Tensor b({}, 4.0);
+    a.requires_grad_();
+    b.requires_grad_();
+
+    Tensor first = mul(a, b);
+    // Multiplying the result again must not reach a or b through what
+    // MulBackward saved, only through its edges.
+    mul(first, Tensor({}, 2.0)).backward();
+
+    CHECK(a.grad()->item() == 8.0);
+    CHECK(b.grad()->item() == 6.0);
+}
+
+TEST_CASE("mixing add and mul follows the product rule", "[autograd]") {
+    Tensor a({}, 2.0);
+    Tensor b({}, 5.0);
+    a.requires_grad_();
+    b.requires_grad_();
+
+    // (a + b) * a, so d/da = (a + b) + a = 9, d/db = a = 2
+    mul(add(a, b), a).backward();
+
+    CHECK(a.grad()->item() == 9.0);
+    CHECK(b.grad()->item() == 2.0);
+}

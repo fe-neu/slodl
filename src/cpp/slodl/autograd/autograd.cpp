@@ -50,9 +50,9 @@ std::vector<std::optional<Tensor>> Node::apply(std::vector<std::optional<Tensor>
 }
 
 AccumulateGrad::AccumulateGrad(const Tensor& leaf)
-    : leaf_meta(leaf.autograd_meta()),
+    : Node("AccumulateGrad"),
+    leaf_meta(leaf.autograd_meta()),
     leaf_shape(leaf.shape()) {
-        name = "AccumulateGrad";
         if (!leaf.is_leaf()) {
             throw std::invalid_argument(
                 "AccumulateGrad: the tensor is not a leaf");
@@ -120,3 +120,6 @@ void Node::collect_inputs(const std::vector<Tensor>& inputs) {
         input_shapes.push_back(input.shape());
     }
 }
+
+Node::Node(std::string name)
+    : name(name) {}
