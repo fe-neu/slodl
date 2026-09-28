@@ -93,6 +93,12 @@ void register_tensor(py::module_& m) {
              },
              py::arg("other"))
         .def("__neg__", [](const Tensor& self) { return neg(self); })
+        // A lambda, not &div: <cstdlib> also declares std::div, so taking the
+        // address is ambiguous.
+        .def("__truediv__", [](const Tensor& self, const Tensor& other) {
+                return div(self, other);
+             },
+             py::arg("other"))
         .def("sum", &sum)
         // Autograd. requires_grad is a property, like in PyTorch, and
         // requires_grad_ returns nothing: the Python layer returns its own

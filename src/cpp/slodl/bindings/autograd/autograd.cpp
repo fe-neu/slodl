@@ -23,6 +23,9 @@ void register_autograd(py::module_& m) {
     m.def("mul", &mul, py::arg("a"), py::arg("b"));
     m.def("sub", &sub, py::arg("a"), py::arg("b"));
     m.def("neg", &neg, py::arg("a"));
+    // A lambda, not &div: <cstdlib> also declares std::div.
+    m.def("div", [](const Tensor& a, const Tensor& b) { return div(a, b); },
+          py::arg("a"), py::arg("b"));
     m.def("sum", &sum, py::arg("a"));
 
     m.def("is_grad_enabled", &is_grad_enabled);

@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -225,4 +226,24 @@ TEST_CASE("the unary kernels record no autograd history", "[tensor]") {
 
     CHECK_FALSE(neg_kernel(t).requires_grad());
     CHECK_FALSE(sub_kernel(t, t).requires_grad());
+}
+
+TEST_CASE("div_kernel divides element by element", "[tensor]") {
+    Tensor quotient = div_kernel(Tensor({2}, {6.0, 9.0}),
+                                 Tensor({2}, {2.0, 3.0}));
+
+    CHECK(quotient[0].item() == 3.0);
+    CHECK(quotient[1].item() == 3.0);
+}
+
+TEST_CASE("div_kernel follows IEEE rules for division by zero", "[tensor]") {
+    Tensor quotient = div_kernel(Tensor({2}, {1.0, 0.0}), Tensor({2}, 0.0));
+
+    CHECK(std::isinf(quotient[0].item()));
+    CHECK(std::isnan(quotient[1].item()));
+}
+
+TEST_CASE("div_kernel rejects mismatched shapes", "[tensor]") {
+    CHECK_THROWS_AS(div_kernel(Tensor({2}), Tensor({3})),
+                    std::invalid_argument);
 }

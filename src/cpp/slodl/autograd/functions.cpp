@@ -36,6 +36,21 @@ std::vector<std::optional<Tensor>> MulBackward::backward(
     return {mul_kernel(*grad_out[0], b), mul_kernel(*grad_out[0], a)};
 }
 
+DivBackward::DivBackward(const Tensor& a, const Tensor& b) : Node("DivBackward"), a(a.detach()), b(b.detach()) {}
+
+std::vector<std::optional<Tensor>> DivBackward::backward(
+    std::vector<std::optional<Tensor>> grad_out
+) {
+
+    return {
+        div_kernel(*grad_out[0], b),
+        mul_kernel(
+            neg_kernel(*grad_out[0]),
+            div_kernel(a, mul_kernel(b, b))
+        )
+    };
+}
+
 SumBackward::SumBackward() : Node("SumBackward") {}
 
 std::vector<std::optional<Tensor>> SumBackward::backward(

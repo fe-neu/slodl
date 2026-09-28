@@ -407,6 +407,41 @@ class Tensor:
             return NotImplemented
         return Tensor._from_impl(self._impl - other._impl)
 
+    def __truediv__(self, other: Tensor) -> Tensor:
+        """Divide by another tensor, element by element.
+
+        Parameters
+        ----------
+        other : Tensor
+            The divisor, of this tensor's shape. Shapes are not broadcast
+            against each other yet, so a plain number is not accepted.
+
+        Returns
+        -------
+        Tensor
+            A new tensor holding the quotients, recording the division if
+            either operand requires a gradient.
+
+        Raises
+        ------
+        ValueError
+            If the shapes differ.
+
+        Notes
+        -----
+        Dividing by zero follows IEEE 754 and gives an infinity, or a NaN
+        for ``0 / 0``, rather than raising.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([6, 9]) / Tensor([2, 3])
+        Tensor([3, 3])
+        """
+        if not isinstance(other, Tensor):
+            return NotImplemented
+        return Tensor._from_impl(self._impl / other._impl)
+
     def __neg__(self) -> Tensor:
         """Flip the sign of every element.
 

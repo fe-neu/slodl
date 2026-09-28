@@ -244,6 +244,21 @@ Tensor neg_kernel(const Tensor& a);
 Tensor mul_kernel(const Tensor& a, const Tensor& b);
 
 /**
+ * Divides two tensors element by element.
+ *
+ * A kernel: it records no autograd history, so the result is a leaf even when
+ * the inputs require gradients. Use the recording `div` for that.
+ *
+ * @param a  Left operand, the dividend.
+ * @param b  Right operand, the divisor, which must have exactly the shape of
+ *           `a`. Dividing by zero follows IEEE 754 and yields an infinity, or
+ *           a NaN for 0/0, rather than throwing.
+ * @return A newly allocated, contiguous tensor holding the quotients.
+ * @throws std::invalid_argument if the two shapes differ.
+ */
+Tensor div_kernel(const Tensor& a, const Tensor& b);
+
+/**
  * Adds up every element of a tensor.
  *
  * A kernel: it records no autograd history, so the result is a leaf even when

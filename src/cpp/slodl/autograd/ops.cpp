@@ -82,6 +82,19 @@ Tensor operator*(const Tensor& a, const Tensor& b) {
     return mul(a, b);
 }
 
+Tensor div(const Tensor& a, const Tensor& b) {
+    Tensor result = div_kernel(a, b);
+
+    if (should_record({a, b})) {
+        set_history(result, std::make_shared<DivBackward>(a, b), {a, b});
+    }
+    return result;
+}
+
+Tensor operator/(const Tensor& a, const Tensor& b) {
+    return div(a, b);
+}
+
 Tensor sum(const Tensor& a) {
     Tensor result = sum_kernel(a);
 

@@ -40,6 +40,13 @@ Tensor mul_kernel(const Tensor& a, const Tensor& b) {
     });
 }
 
+Tensor div_kernel(const Tensor& a, const Tensor& b) {
+    return elementwise(a, b, [](double left, double right) {
+        return left / right;
+    });
+}
+
+
 Tensor sum_kernel(const Tensor& a) {
     const double total = reduce_all(a, 0.0, [](double accumulated, double element) {
         return accumulated + element;

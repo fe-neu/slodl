@@ -83,6 +83,31 @@ class MulBackward : public Node {
 };
 
 /**
+ * Backward of element-wise division.
+ *
+ * For a / b the two partial derivatives differ in kind. With respect to the
+ * dividend the divisor is only a constant factor, so the derivative is 1/b and
+ * the gradient is the incoming gradient divided by b. With respect to the
+ * divisor, writing the quotient as a * b^-1 gives a derivative of -a / b^2, so
+ * that gradient is negative: raising the divisor lowers the result.
+ *
+ * Both inputs are needed to compute those, so this node saves them, detached
+ * so that the saved values carry no history and cannot keep the graph that
+ * produced them alive.
+ */
+class DivBackward : public Node {
+    public:
+        DivBackward(const Tensor& a, const Tensor& b);
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+
+    private:
+        Tensor a;
+        Tensor b;
+};
+
+/**
  * Backward of summing every element.
  *
  * A sum is linear in each element: nudging one element moves the total by the

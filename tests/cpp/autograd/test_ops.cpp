@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <stdexcept>
@@ -6,6 +7,7 @@
 #include "slodl/autograd/functions.hpp"
 #include "slodl/autograd/grad_mode.hpp"
 #include "slodl/autograd/ops.hpp"
+#include "slodl/tensor/ops.hpp"
 #include "slodl/tensor/tensor.hpp"
 
 TEST_CASE("add computes the sum", "[autograd]") {
@@ -416,4 +418,89 @@ TEST_CASE("sub and neg agree with each other", "[autograd]") {
 
     CHECK((*c.grad())[0].item() == a_direct);
     CHECK((*d.grad())[0].item() == b_direct);
+}
+
+TEST_CASE("div divides element by element", "[autograd]") {
+    Tensor quotient = div(Tensor({2}, {6.0, 9.0}), Tensor({2}, {2.0, 3.0}));
+
+    CHECK(quotient[0].item() == 3.0);
+    CHECK(quotient[1].item() == 3.0);
+}
+
+TEST_CASE("div records a graph when an input requires a gradient",
+          "[autograd]") {
+    Tensor a({2}, 6.0);
+    a.requires_grad_();
+
+    Tensor quotient = div(a, Tensor({2}, 2.0));
+
+    REQUIRE(quotient.autograd_meta()->grad_fn != nullptr);
+    CHECK(quotient.autograd_meta()->grad_fn->name == "DivBackward");
+}
+
+TEST_CASE("backward through div follows the quotient rule", "[autograd]") {
+    Tensor a({}, 6.0);
+    Tensor b({}, 2.0);
+    a.requires_grad_();
+    b.requires_grad_();
+
+    div(a, b).backward();
+
+    // d/da (a/b) = 1/b = 0.5; d/db (a/b) = -a/b^2 = -1.5
+    CHECK(a.grad()->item() == 0.5);
+    CHECK(b.grad()->item() == -1.5);
+}
+
+TEST_CASE("the divisor's gradient is negative", "[autograd]") {
+    Tensor a({2}, {8.0, 3.0});
+    Tensor b({2}, {4.0, 1.0});
+    a.requires_grad_();
+    b.requires_grad_();
+
+    sum(div(a, b)).backward();
+
+    CHECK((*a.grad())[0].item() == 0.25);    // 1/4
+    CHECK((*a.grad())[1].item() == 1.0);     // 1/1
+    CHECK((*b.grad())[0].item() == -0.5);    // -8/16
+    CHECK((*b.grad())[1].item() == -3.0);    // -3/1
+}
+
+TEST_CASE("div matches a finite-difference gradient", "[autograd]") {
+    const double step = 1e-6;
+
+    Tensor a({}, 7.0);
+    Tensor b({}, 3.0);
+    a.requires_grad_();
+    b.requires_grad_();
+    div(a, b).backward();
+
+    const double numeric_a =
+        (div_kernel(Tensor({}, 7.0 + step), Tensor({}, 3.0)).item() -
+         div_kernel(Tensor({}, 7.0 - step), Tensor({}, 3.0)).item()) / (2 * step);
+    const double numeric_b =
+        (div_kernel(Tensor({}, 7.0), Tensor({}, 3.0 + step)).item() -
+         div_kernel(Tensor({}, 7.0), Tensor({}, 3.0 - step)).item()) / (2 * step);
+
+    CHECK(a.grad()->item() == Catch::Approx(numeric_a).epsilon(1e-6));
+    CHECK(b.grad()->item() == Catch::Approx(numeric_b).epsilon(1e-6));
+}
+
+TEST_CASE("operator/ divides like div", "[autograd]") {
+    Tensor a({2}, 6.0);
+    a.requires_grad_();
+
+    Tensor quotient = a / Tensor({2}, 2.0);
+
+    CHECK(quotient[0].item() == 3.0);
+    CHECK(quotient.autograd_meta()->grad_fn->name == "DivBackward");
+}
+
+TEST_CASE("dividing a tensor by itself gives a zero gradient", "[autograd]") {
+    Tensor a({}, 5.0);
+    a.requires_grad_();
+
+    div(a, a).backward();
+
+    // 1/a from the dividend and -a/a^2 from the divisor cancel.
+    CHECK(a.grad()->item() == Catch::Approx(0.0).margin(1e-12));
 }

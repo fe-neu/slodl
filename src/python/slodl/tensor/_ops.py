@@ -213,3 +213,52 @@ def neg(a: Tensor) -> Tensor:
     Tensor(-1)
     """
     return Tensor._from_impl(_core.neg(a._impl))
+
+
+def div(a: Tensor, b: Tensor) -> Tensor:
+    """Divide one tensor by another, element by element.
+
+    Parameters
+    ----------
+    a : Tensor
+        The dividend.
+    b : Tensor
+        The divisor, of the same shape as ``a``. Shapes are not broadcast
+        against each other yet.
+
+    Returns
+    -------
+    Tensor
+        A new tensor holding the quotients. It requires a gradient, and
+        records the division, if either input requires one.
+
+    Raises
+    ------
+    ValueError
+        If the two shapes differ.
+
+    See Also
+    --------
+    slodl.Tensor.__truediv__ : The same operation, spelled ``a / b``.
+
+    Notes
+    -----
+    Dividing by zero follows IEEE 754 and gives an infinity, or a NaN for
+    ``0 / 0``, rather than raising.
+
+    Examples
+    --------
+    >>> from slodl import Tensor, div
+    >>> div(Tensor([6, 9]), Tensor([2, 3]))
+    Tensor([3, 3])
+
+    The divisor's gradient is negative, because raising it lowers the
+    result:
+
+    >>> a = Tensor(6.0).requires_grad_()
+    >>> b = Tensor(2.0).requires_grad_()
+    >>> (a / b).backward()
+    >>> a.grad, b.grad
+    (Tensor(0.5), Tensor(-1.5))
+    """
+    return Tensor._from_impl(_core.div(a._impl, b._impl))

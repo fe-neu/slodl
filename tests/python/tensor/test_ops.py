@@ -198,3 +198,43 @@ def test_backward_through_neg_negates_the_gradient():
 def test_subtracting_a_float_is_a_type_error():
     with pytest.raises(TypeError):
         Tensor([1.0]) - 2.0
+
+
+def test_div_returns_the_quotients():
+    result = slodl.div(Tensor([6.0, 9.0]), Tensor([2.0, 3.0]))
+
+    assert [result[i] for i in range(2)] == [3.0, 3.0]
+
+
+def test_operator_divides_like_div():
+    result = Tensor([[8.0, 6.0], [4.0, 2.0]]) / Tensor([[2.0, 2.0], [4.0, 4.0]])
+
+    assert result.shape == [2, 2]
+    assert result[1][1] == 0.5
+
+
+def test_div_rejects_mismatched_shapes():
+    with pytest.raises(ValueError):
+        Tensor([1.0, 2.0]) / Tensor([1.0, 2.0, 3.0])
+
+
+def test_backward_through_div_follows_the_quotient_rule():
+    a = Tensor(6.0).requires_grad_()
+    b = Tensor(2.0).requires_grad_()
+
+    (a / b).backward()
+
+    assert a.grad.item() == 0.5       # 1 / b
+    assert b.grad.item() == -1.5      # -a / b**2
+
+
+def test_dividing_by_zero_does_not_raise():
+    result = Tensor([1.0, 0.0]) / Tensor([0.0, 0.0])
+
+    assert result[0] == float("inf")
+    assert result[1] != result[1]     # NaN
+
+
+def test_dividing_by_a_float_is_a_type_error():
+    with pytest.raises(TypeError):
+        Tensor([1.0]) / 2.0
