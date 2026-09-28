@@ -47,6 +47,24 @@ Tensor add(const Tensor& a, const Tensor& b);
 Tensor operator+(const Tensor& a, const Tensor& b);
 
 /**
+ * calude do this
+ * @throws std::invalid_argument if the two shapes differ.
+ */
+Tensor sub(const Tensor& a, const Tensor& b);
+
+/** Subtract two tensors; see sub(). */
+Tensor operator-(const Tensor& a, const Tensor& b);
+
+/**
+ * calude do this
+ * @throws std::invalid_argument if the two shapes differ.
+ */
+Tensor neg(const Tensor& a);
+
+/** claude */
+Tensor operator-(const Tensor& a);
+
+/**
  * Calculates the Hadamard product of two tensors, recording the operation for autograd.
  *
  * @param a  Left operand.

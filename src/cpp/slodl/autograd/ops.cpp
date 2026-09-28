@@ -43,6 +43,32 @@ Tensor operator+(const Tensor& a, const Tensor& b) {
     return add(a, b);
 }
 
+Tensor sub(const Tensor& a, const Tensor& b) {
+    Tensor result = sub_kernel(a, b);
+
+    if (should_record({a, b})) {
+        set_history(result, std::make_shared<SubBackward>(), {a, b});
+    }
+    return result;
+}
+
+Tensor operator-(const Tensor& a, const Tensor& b) {
+    return sub(a, b);
+}
+
+Tensor neg(const Tensor& a) {
+    Tensor result = neg_kernel(a);
+
+    if (should_record({a})) {
+        set_history(result, std::make_shared<NegBackward>(), {a});
+    }
+    return result;
+}
+
+Tensor operator-(const Tensor& a) {
+    return neg(a);
+}
+
 Tensor mul(const Tensor& a, const Tensor& b) {
     Tensor result = mul_kernel(a, b);
 

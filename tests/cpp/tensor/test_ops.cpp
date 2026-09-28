@@ -170,3 +170,59 @@ TEST_CASE("sum_kernel records no autograd history", "[tensor]") {
 
     CHECK_FALSE(sum_kernel(t).requires_grad());
 }
+
+TEST_CASE("unary_elementwise transforms every element", "[tensor]") {
+    Tensor doubled = unary_elementwise(Tensor({2, 2}, {1.0, 2.0, 3.0, 4.0}),
+                                       [](double x) { return x * 2.0; });
+
+    CHECK(doubled.shape() == std::vector<std::size_t>{2, 2});
+    CHECK(doubled[0][0].item() == 2.0);
+    CHECK(doubled[1][1].item() == 8.0);
+}
+
+TEST_CASE("unary_elementwise walks a view by its strides", "[tensor]") {
+    Tensor matrix({3, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor result = unary_elementwise(matrix[2], [](double x) { return x; });
+
+    CHECK(result.shape() == std::vector<std::size_t>{2});
+    CHECK(result[0].item() == 5.0);
+    CHECK(result[1].item() == 6.0);
+}
+
+TEST_CASE("sub_kernel subtracts element by element", "[tensor]") {
+    Tensor difference = sub_kernel(Tensor({2}, {10.0, 3.0}),
+                                   Tensor({2}, {4.0, 8.0}));
+
+    CHECK(difference[0].item() == 6.0);
+    CHECK(difference[1].item() == -5.0);
+}
+
+TEST_CASE("sub_kernel rejects mismatched shapes", "[tensor]") {
+    CHECK_THROWS_AS(sub_kernel(Tensor({2}), Tensor({3})),
+                    std::invalid_argument);
+}
+
+TEST_CASE("neg_kernel flips every sign", "[tensor]") {
+    Tensor negated = neg_kernel(Tensor({3}, {1.0, -2.0, 0.0}));
+
+    CHECK(negated[0].item() == -1.0);
+    CHECK(negated[1].item() == 2.0);
+    CHECK(negated[2].item() == 0.0);
+}
+
+TEST_CASE("neg_kernel handles views, scalars and empty tensors", "[tensor]") {
+    Tensor matrix({2, 2}, {1.0, 2.0, 3.0, 4.0});
+
+    CHECK(neg_kernel(matrix[1])[0].item() == -3.0);
+    CHECK(neg_kernel(Tensor({}, 5.0)).item() == -5.0);
+    CHECK(neg_kernel(Tensor({0})).shape() == std::vector<std::size_t>{0});
+}
+
+TEST_CASE("the unary kernels record no autograd history", "[tensor]") {
+    Tensor t({2}, 1.0);
+    t.requires_grad_();
+
+    CHECK_FALSE(neg_kernel(t).requires_grad());
+    CHECK_FALSE(sub_kernel(t, t).requires_grad());
+}

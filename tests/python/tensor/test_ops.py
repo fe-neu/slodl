@@ -142,3 +142,59 @@ def test_sum_makes_a_vector_computation_differentiable():
 
     assert [a.grad[i] for i in range(2)] == [10.0, 20.0]
     assert [b.grad[i] for i in range(2)] == [2.0, 3.0]
+
+
+def test_sub_returns_the_differences():
+    result = slodl.sub(Tensor([10.0, 3.0]), Tensor([4.0, 8.0]))
+
+    assert [result[i] for i in range(2)] == [6.0, -5.0]
+
+
+def test_operator_subtracts_like_sub():
+    result = Tensor([[5.0, 6.0], [7.0, 8.0]]) - Tensor([[1.0, 2.0], [3.0, 4.0]])
+
+    assert result.shape == [2, 2]
+    assert result[1][1] == 4.0
+
+
+def test_sub_rejects_mismatched_shapes():
+    with pytest.raises(ValueError):
+        Tensor([1.0, 2.0]) - Tensor([1.0, 2.0, 3.0])
+
+
+def test_backward_through_sub_negates_the_right_gradient():
+    a = Tensor(5.0).requires_grad_()
+    b = Tensor(3.0).requires_grad_()
+
+    (a - b).backward()
+
+    assert a.grad.item() == 1.0
+    assert b.grad.item() == -1.0
+
+
+def test_neg_flips_every_sign():
+    result = slodl.neg(Tensor([1.0, -2.0, 0.0]))
+
+    assert [result[i] for i in range(3)] == [-1.0, 2.0, 0.0]
+
+
+def test_unary_operator_negates_like_neg():
+    a = Tensor([2.0, 3.0]).requires_grad_()
+
+    result = -a
+
+    assert [result[i] for i in range(2)] == [-2.0, -3.0]
+    assert result.grad_fn.name == "NegBackward"
+
+
+def test_backward_through_neg_negates_the_gradient():
+    a = Tensor(3.0).requires_grad_()
+
+    (-a).backward()
+
+    assert a.grad.item() == -1.0
+
+
+def test_subtracting_a_float_is_a_type_error():
+    with pytest.raises(TypeError):
+        Tensor([1.0]) - 2.0

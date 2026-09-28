@@ -21,6 +21,8 @@ void register_autograd(py::module_& m) {
 
     m.def("add", &add, py::arg("a"), py::arg("b"));
     m.def("mul", &mul, py::arg("a"), py::arg("b"));
+    m.def("sub", &sub, py::arg("a"), py::arg("b"));
+    m.def("neg", &neg, py::arg("a"));
     m.def("sum", &sum, py::arg("a"));
 
     m.def("is_grad_enabled", &is_grad_enabled);

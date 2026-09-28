@@ -23,6 +23,40 @@ class AddBackward : public Node {
 };
 
 /**
+ * Backward of subtraction.
+ *
+ * Raising the left operand raises the difference by the same amount, while
+ * raising the right operand lowers it, so the partial derivatives are 1 and
+ * -1. The left input therefore receives the incoming gradient unchanged and
+ * the right one receives it negated.
+ *
+ * Nothing from the forward pass is needed, which makes this node stateless.
+ */
+class SubBackward : public Node {
+    public:
+        SubBackward();
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+};
+
+/**
+ * Backward of negation.
+ *
+ * Negating scales its input by -1, so the partial derivative is -1 and the
+ * incoming gradient comes back negated.
+ *
+ * Nothing from the forward pass is needed, which makes this node stateless.
+ */
+class NegBackward : public Node {
+    public:
+        NegBackward();
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+};
+
+/**
  * Backward of element-wise multiplication.
  *
  * Each input is scaled by the other, so the partial derivative with respect to

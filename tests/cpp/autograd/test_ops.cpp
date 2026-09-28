@@ -298,3 +298,122 @@ TEST_CASE("sum of a view gradient reaches only the view's elements",
     CHECK((*a.grad())[0].item() == 2.0);
     CHECK((*a.grad())[1].item() == 2.0);
 }
+
+TEST_CASE("sub subtracts element by element", "[autograd]") {
+    Tensor difference = sub(Tensor({2}, {10.0, 3.0}), Tensor({2}, {4.0, 8.0}));
+
+    CHECK(difference[0].item() == 6.0);
+    CHECK(difference[1].item() == -5.0);
+}
+
+TEST_CASE("sub records a graph when an input requires a gradient",
+          "[autograd]") {
+    Tensor a({2}, 1.0);
+    a.requires_grad_();
+
+    Tensor difference = sub(a, Tensor({2}, 2.0));
+
+    REQUIRE(difference.autograd_meta()->grad_fn != nullptr);
+    CHECK(difference.autograd_meta()->grad_fn->name == "SubBackward");
+}
+
+TEST_CASE("SubBackward negates only the right operand's gradient",
+          "[autograd]") {
+    Tensor a({2}, 1.0);
+    Tensor b({2}, 2.0);
+    a.requires_grad_();
+    b.requires_grad_();
+
+    const std::shared_ptr<Node> node = sub(a, b).autograd_meta()->grad_fn;
+    std::vector<std::optional<Tensor>> gradients =
+        node->apply({Tensor({2}, {3.0, 4.0})});
+
+    REQUIRE(gradients.size() == 2);
+    CHECK((*gradients[0])[0].item() == 3.0);
+    CHECK((*gradients[0])[1].item() == 4.0);
+    CHECK((*gradients[1])[0].item() == -3.0);
+    CHECK((*gradients[1])[1].item() == -4.0);
+}
+
+TEST_CASE("backward through sub gives 1 and -1", "[autograd]") {
+    Tensor a({}, 5.0);
+    Tensor b({}, 3.0);
+    a.requires_grad_();
+    b.requires_grad_();
+
+    sub(a, b).backward();
+
+    CHECK(a.grad()->item() == 1.0);
+    CHECK(b.grad()->item() == -1.0);
+}
+
+TEST_CASE("operator- subtracts like sub", "[autograd]") {
+    Tensor a({2}, 5.0);
+    a.requires_grad_();
+
+    Tensor difference = a - Tensor({2}, 2.0);
+
+    CHECK(difference[0].item() == 3.0);
+    CHECK(difference.autograd_meta()->grad_fn->name == "SubBackward");
+}
+
+TEST_CASE("neg flips every sign", "[autograd]") {
+    Tensor negated = neg(Tensor({2}, {1.0, -2.0}));
+
+    CHECK(negated[0].item() == -1.0);
+    CHECK(negated[1].item() == 2.0);
+}
+
+TEST_CASE("neg records a graph and negates the gradient", "[autograd]") {
+    Tensor a({}, 3.0);
+    a.requires_grad_();
+
+    Tensor negated = neg(a);
+    REQUIRE(negated.autograd_meta()->grad_fn != nullptr);
+    CHECK(negated.autograd_meta()->grad_fn->name == "NegBackward");
+
+    negated.backward();
+    CHECK(a.grad()->item() == -1.0);
+}
+
+TEST_CASE("unary operator- negates like neg", "[autograd]") {
+    Tensor a({2}, 2.0);
+    a.requires_grad_();
+
+    Tensor negated = -a;
+
+    CHECK(negated[0].item() == -2.0);
+    CHECK(negated.autograd_meta()->grad_fn->name == "NegBackward");
+}
+
+TEST_CASE("subtracting a tensor from itself gives a zero gradient",
+          "[autograd]") {
+    Tensor a({}, 4.0);
+    a.requires_grad_();
+
+    sub(a, a).backward();
+
+    // +1 from the left operand, -1 from the right.
+    CHECK(a.grad()->item() == 0.0);
+}
+
+TEST_CASE("sub and neg agree with each other", "[autograd]") {
+    Tensor a({2}, {5.0, 6.0});
+    Tensor b({2}, {2.0, 3.0});
+    a.requires_grad_();
+    b.requires_grad_();
+
+    // sum(a - b) and sum(a + (-b)) must give the same gradients.
+    sum(sub(a, b)).backward();
+    const double a_direct = (*a.grad())[0].item();
+    const double b_direct = (*b.grad())[0].item();
+
+    Tensor c({2}, {5.0, 6.0});
+    Tensor d({2}, {2.0, 3.0});
+    c.requires_grad_();
+    d.requires_grad_();
+    sum(add(c, neg(d))).backward();
+
+    CHECK((*c.grad())[0].item() == a_direct);
+    CHECK((*d.grad())[0].item() == b_direct);
+}

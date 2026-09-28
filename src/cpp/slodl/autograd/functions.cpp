@@ -11,6 +11,22 @@ std::vector<std::optional<Tensor>> AddBackward::backward(
     return {grad_out[0], grad_out[0]};
 }
 
+SubBackward::SubBackward() : Node("SubBackward") {}
+
+std::vector<std::optional<Tensor>> SubBackward::backward(
+    std::vector<std::optional<Tensor>> grad_out
+) {
+    return {grad_out[0], neg_kernel(*grad_out[0])};
+}
+
+NegBackward::NegBackward() : Node("NegBackward") {}
+
+std::vector<std::optional<Tensor>> NegBackward::backward(
+    std::vector<std::optional<Tensor>> grad_out
+) {
+    return {neg_kernel(*grad_out[0])};
+}
+
 MulBackward::MulBackward(const Tensor& a, const Tensor& b) : Node("MulBackward"), a(a.detach()), b(b.detach()) {}
 
 std::vector<std::optional<Tensor>> MulBackward::backward(

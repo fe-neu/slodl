@@ -135,3 +135,81 @@ def sum(a: Tensor) -> Tensor:
     Tensor([2, 3])
     """
     return Tensor._from_impl(_core.sum(a._impl))
+
+
+def sub(a: Tensor, b: Tensor) -> Tensor:
+    """Subtract one tensor from another, element by element.
+
+    Parameters
+    ----------
+    a : Tensor
+        Tensor to subtract from.
+    b : Tensor
+        Tensor to subtract, of the same shape as ``a``. Shapes are not
+        broadcast against each other yet.
+
+    Returns
+    -------
+    Tensor
+        A new tensor holding the differences. It requires a gradient, and
+        records the subtraction, if either input requires one.
+
+    Raises
+    ------
+    ValueError
+        If the two shapes differ.
+
+    See Also
+    --------
+    slodl.Tensor.__sub__ : The same operation, spelled ``a - b``.
+
+    Examples
+    --------
+    >>> from slodl import Tensor, sub
+    >>> sub(Tensor([10, 3]), Tensor([4, 8]))
+    Tensor([6, -5])
+
+    Raising the right operand lowers the difference, so its gradient is
+    negated:
+
+    >>> a = Tensor(5.0).requires_grad_()
+    >>> b = Tensor(3.0).requires_grad_()
+    >>> (a - b).backward()
+    >>> a.grad, b.grad
+    (Tensor(1), Tensor(-1))
+    """
+    return Tensor._from_impl(_core.sub(a._impl, b._impl))
+
+
+def neg(a: Tensor) -> Tensor:
+    """Flip the sign of every element of a tensor.
+
+    Parameters
+    ----------
+    a : Tensor
+        Tensor to negate.
+
+    Returns
+    -------
+    Tensor
+        A new tensor holding the negated elements. It requires a gradient,
+        and records the negation, if ``a`` does.
+
+    See Also
+    --------
+    slodl.Tensor.__neg__ : The same operation, spelled ``-a``.
+
+    Examples
+    --------
+    >>> from slodl import Tensor, neg
+    >>> neg(Tensor([1, -2, 3]))
+    Tensor([-1, 2, -3])
+
+    The gradient comes back negated too:
+
+    >>> a = Tensor(3.0).requires_grad_()
+    >>> (-a).backward()
+    >>> a.grad
+    Tensor(-1)
+    """
+    return Tensor._from_impl(_core.neg(a._impl))

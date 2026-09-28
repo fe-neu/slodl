@@ -377,6 +377,53 @@ class Tensor:
             return NotImplemented
         return Tensor._from_impl(self._impl * other._impl)
 
+    def __sub__(self, other: Tensor) -> Tensor:
+        """Subtract another tensor, element by element.
+
+        Parameters
+        ----------
+        other : Tensor
+            A tensor of this tensor's shape. Shapes are not broadcast
+            against each other yet, so a plain number is not accepted.
+
+        Returns
+        -------
+        Tensor
+            A new tensor holding the differences, recording the subtraction
+            if either operand requires a gradient.
+
+        Raises
+        ------
+        ValueError
+            If the shapes differ.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([10, 3]) - Tensor([4, 8])
+        Tensor([6, -5])
+        """
+        if not isinstance(other, Tensor):
+            return NotImplemented
+        return Tensor._from_impl(self._impl - other._impl)
+
+    def __neg__(self) -> Tensor:
+        """Flip the sign of every element.
+
+        Returns
+        -------
+        Tensor
+            A new tensor holding the negated elements, recording the
+            negation if this tensor requires a gradient.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> -Tensor([1, -2, 3])
+        Tensor([-1, 2, -3])
+        """
+        return Tensor._from_impl(-self._impl)
+
     def sum(self) -> Tensor:
         """Add up every element of this tensor.
 

@@ -94,6 +94,59 @@ Tensor elementwise(const Tensor& a, const Tensor& b, Operation operation) {
 }
 
 /**
+ * Applies an operation to each logical element of a tensor.
+ *
+ * Kernels only: this records no autograd history, so the result is always a
+ * leaf that requires no gradient. The input may be a view, whose elements are
+ * walked by their strides rather than straight through memory.
+ *
+ * The one-tensor counterpart to elementwise(), on which every single-operand
+ * kernel is built.
+ *
+ * @param a          Tensor to transform.
+ * @param operation  Callable invoked as operation(double) for each element,
+ *                   returning the element of the result.
+ * @return A newly allocated, contiguous tensor of the same shape as `a`,
+ *         holding the results.
+ */
+template <typename Operation>
+Tensor unary_elementwise(const Tensor& a, Operation operation) {
+
+    // Walking the inputs by hand: data() points at the view's first element,
+    // but the elements after it are strides apart, not adjacent.
+    const std::vector<std::size_t>& dims = a.shape();
+    Tensor out(dims);
+
+    const std::size_t count = element_count(dims);
+    if (count == 0) {
+        return out;
+    }
+
+    const double* element = a.data();
+    double* result = out.data();
+    const std::vector<std::size_t>& strides = a.element_strides();
+
+    // The same odometer as elementwise(), over one tensor instead of two.
+    std::vector<std::size_t> counter(dims.size(), 0);
+    std::size_t offset = 0;
+
+    for (std::size_t i = 0; i < count; i++) {
+        result[i] = operation(element[offset]);
+
+        for (std::size_t axis = dims.size(); axis-- > 0;) {
+            counter[axis]++;
+            offset += strides[axis];
+            if (counter[axis] < dims[axis]) {
+                break;
+            }
+            counter[axis] = 0;
+            offset -= dims[axis] * strides[axis];
+        }
+    }
+    return out;
+}
+
+/**
  * Folds every logical element of a tensor into a single value.
  *
  * Walks the tensor by its strides, like elementwise(), so a view reduces over
@@ -151,6 +204,31 @@ double reduce_all(const Tensor& a, double initial, Operation operation) {
  * @throws std::invalid_argument if the two shapes differ.
  */
 Tensor add_kernel(const Tensor& a, const Tensor& b);
+
+/**
+ * Subtracts two tensors element by element.
+ *
+ * A kernel: it records no autograd history, so the result is a leaf even when
+ * the inputs require gradients. Use the recording `sub` for that.
+ *
+ * @param a  Left operand.
+ * @param b  Right operand, subtracted from `a`, which must have exactly the
+ *           shape of `a`.
+ * @return A newly allocated, contiguous tensor holding the differences.
+ * @throws std::invalid_argument if the two shapes differ.
+ */
+Tensor sub_kernel(const Tensor& a, const Tensor& b);
+
+/**
+ * Flips the sign of every element of a tensor.
+ *
+ * A kernel: it records no autograd history, so the result is a leaf even when
+ * the input requires a gradient. Use the recording `neg` for that.
+ *
+ * @param a  Tensor to negate, which may be a view.
+ * @return A newly allocated, contiguous tensor holding the negated elements.
+ */
+Tensor neg_kernel(const Tensor& a);
 
 /**
  * Calculates Hadamard Product of two tensors element by element.

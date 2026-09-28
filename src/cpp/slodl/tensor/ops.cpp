@@ -22,6 +22,18 @@ Tensor add_kernel(const Tensor& a, const Tensor& b) {
     });
 }
 
+Tensor sub_kernel(const Tensor& a, const Tensor& b) {
+    return elementwise(a, b, [](double left, double right) {
+        return left - right;
+    });
+}
+
+Tensor neg_kernel(const Tensor& a) {
+    return unary_elementwise(a, [](double element) {
+        return -element;
+    });
+}
+
 Tensor mul_kernel(const Tensor& a, const Tensor& b) {
     return elementwise(a, b, [](double left, double right) {
         return left * right;
