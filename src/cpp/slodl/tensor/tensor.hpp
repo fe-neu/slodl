@@ -99,6 +99,23 @@ public:
     /** Aliases `other`: shares its storage and its autograd state. */
     Tensor(const Tensor& other) = default;
 
+    /**
+     * Reads this tensor as though it had a larger shape.
+     *
+     * Dimensions of 1 are stretched to the requested size, and dimensions the
+     * tensor does not have are added on the left. Nothing is copied: the
+     * stretched axes are given a stride of 0, so the same element is read
+     * again for every position along them.
+     *
+     * @param shape  Shape to read this tensor as, which this tensor's shape
+     *               must broadcast to.
+     * @return A view sharing this tensor's storage, with the requested shape
+     *         and no autograd history of its own.
+     * @throws std::invalid_argument if this tensor's shape does not broadcast
+     *         to `shape`.
+     */
+    Tensor expand(const std::vector<std::size_t>& shape) const;
+
     /** Aliases `other`, like the copy constructor. To write values into this
      * tensor's existing elements, use copy_(). */
     Tensor& operator=(const Tensor& other) = default;

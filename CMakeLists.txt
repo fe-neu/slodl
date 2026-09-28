@@ -6,6 +6,7 @@ add_library(slodl_core STATIC
     src/cpp/slodl/tensor/tensor.cpp
     src/cpp/slodl/tensor/tensor_storage.cpp
     src/cpp/slodl/tensor/ops.cpp
+    src/cpp/slodl/tensor/shape.cpp
     src/cpp/slodl/autograd/autograd.cpp
     src/cpp/slodl/autograd/grad_mode.cpp
     src/cpp/slodl/autograd/functions.cpp

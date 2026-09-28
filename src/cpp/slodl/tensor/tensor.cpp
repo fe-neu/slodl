@@ -7,6 +7,7 @@
 #include "slodl/tensor/tensor_storage.hpp"
 #include "slodl/autograd/autograd.hpp"
 #include "slodl/autograd/engine.hpp"
+#include "slodl/tensor/shape.hpp"
 
 Tensor::Tensor(std::vector<std::size_t> dims)
     : storage(std::make_shared<TensorStorage>(get_size_for_dims(dims), 0.0)),
@@ -90,6 +91,15 @@ Tensor Tensor::operator[](std::size_t index) const {
         start_offset + index * strides[0],
         std::vector<std::size_t>(strides.begin() + 1, strides.end()),
         std::vector<std::size_t>(dims.begin() + 1, dims.end())
+    );
+}
+
+Tensor Tensor::expand(const std::vector<std::size_t>& shape) const {
+    return Tensor(
+        storage,
+        start_offset,
+        broadcast_strides(dims, strides, shape),
+        shape
     );
 }
 

@@ -504,3 +504,110 @@ TEST_CASE("dividing a tensor by itself gives a zero gradient", "[autograd]") {
     // 1/a from the dividend and -a/a^2 from the divisor cancel.
     CHECK(a.grad()->item() == Catch::Approx(0.0).margin(1e-12));
 }
+
+TEST_CASE("expand records a graph and sums the gradient back", "[autograd]") {
+    Tensor row({3}, {1.0, 2.0, 3.0});
+    row.requires_grad_();
+
+    Tensor wide = expand(row, {2, 3});
+
+    REQUIRE(wide.autograd_meta()->grad_fn != nullptr);
+    CHECK(wide.autograd_meta()->grad_fn->name == "ExpandBackward");
+
+    sum(wide).backward();
+
+    // Each element was read once per row, so each gets a gradient of 2.
+    REQUIRE(row.grad() != nullptr);
+    CHECK(row.grad()->shape() == std::vector<std::size_t>{3});
+    CHECK((*row.grad())[0].item() == 2.0);
+    CHECK((*row.grad())[2].item() == 2.0);
+}
+
+TEST_CASE("add broadcasts a row across a matrix", "[autograd]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor row({3}, {10.0, 20.0, 30.0});
+
+    Tensor result = add(matrix, row);
+
+    CHECK(result.shape() == std::vector<std::size_t>{2, 3});
+    CHECK(result[0][0].item() == 11.0);
+    CHECK(result[1][2].item() == 36.0);
+}
+
+TEST_CASE("a broadcast operand's gradient is summed back to its shape",
+          "[autograd]") {
+    Tensor matrix({2, 3}, 1.0);
+    Tensor bias({3}, 1.0);
+    matrix.requires_grad_();
+    bias.requires_grad_();
+
+    sum(add(matrix, bias)).backward();
+
+    CHECK(matrix.grad()->shape() == std::vector<std::size_t>{2, 3});
+    CHECK((*matrix.grad())[0][0].item() == 1.0);
+
+    // The bias took part in both rows, so its gradient is 2 per element.
+    CHECK(bias.grad()->shape() == std::vector<std::size_t>{3});
+    CHECK((*bias.grad())[0].item() == 2.0);
+    CHECK((*bias.grad())[2].item() == 2.0);
+}
+
+TEST_CASE("multiplying by a broadcast scalar scales and sums", "[autograd]") {
+    Tensor values({3}, {1.0, 2.0, 3.0});
+    Tensor factor({}, 10.0);
+    values.requires_grad_();
+    factor.requires_grad_();
+
+    sum(mul(values, factor)).backward();
+
+    // d/dvalues = factor, d/dfactor = sum(values)
+    CHECK((*values.grad())[0].item() == 10.0);
+    CHECK(values.grad()->shape() == std::vector<std::size_t>{3});
+    CHECK(factor.grad()->shape().empty());
+    CHECK(factor.grad()->item() == 6.0);
+}
+
+TEST_CASE("broadcasting works in both directions at once", "[autograd]") {
+    Tensor column({2, 1}, {1.0, 2.0});
+    Tensor row({1, 3}, {10.0, 20.0, 30.0});
+    column.requires_grad_();
+    row.requires_grad_();
+
+    Tensor product = mul(column, row);
+    CHECK(product.shape() == std::vector<std::size_t>{2, 3});
+    CHECK(product[1][2].item() == 60.0);
+
+    sum(product).backward();
+
+    // Each column element multiplies the whole row, so its gradient is the
+    // row's total, and vice versa.
+    CHECK(column.grad()->shape() == std::vector<std::size_t>{2, 1});
+    CHECK((*column.grad())[0][0].item() == 60.0);
+    CHECK(row.grad()->shape() == std::vector<std::size_t>{1, 3});
+    CHECK((*row.grad())[0][0].item() == 3.0);
+}
+
+TEST_CASE("broadcast division matches a finite-difference gradient",
+          "[autograd]") {
+    const double step = 1e-6;
+
+    Tensor values({2}, {6.0, 8.0});
+    Tensor divisor({}, 2.0);
+    values.requires_grad_();
+    divisor.requires_grad_();
+    sum(div(values, divisor)).backward();
+
+    const auto loss = [](double d) {
+        return sum_kernel(div_kernel(Tensor({2}, {6.0, 8.0}),
+                                     Tensor({}, d).expand({2}))).item();
+    };
+    const double numeric = (loss(2.0 + step) - loss(2.0 - step)) / (2 * step);
+
+    CHECK(divisor.grad()->item() == Catch::Approx(numeric).epsilon(1e-6));
+    CHECK((*values.grad())[0].item() == Catch::Approx(0.5));
+}
+
+TEST_CASE("incompatible shapes are still rejected", "[autograd]") {
+    CHECK_THROWS_AS(add(Tensor({2}), Tensor({3})), std::invalid_argument);
+    CHECK_THROWS_AS(mul(Tensor({2, 3}), Tensor({2, 4})), std::invalid_argument);
+}

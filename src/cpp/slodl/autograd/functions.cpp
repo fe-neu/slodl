@@ -59,3 +59,11 @@ std::vector<std::optional<Tensor>> SumBackward::backward(
 
     return {Tensor(input_shapes[0], grad_out[0]->item())};
 }
+
+ExpandBackward::ExpandBackward() : Node("ExpandBackward") {}
+
+std::vector<std::optional<Tensor>> ExpandBackward::backward(
+    std::vector<std::optional<Tensor>> grad_out
+) {
+    return {sum_to_size(*grad_out[0], input_shapes[0])};
+}

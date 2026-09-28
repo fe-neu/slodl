@@ -8,6 +8,22 @@
 #include "slodl/tensor/tensor.hpp"
 
 /**
+ * Reads a tensor as though it had a larger shape, recording the operation.
+ *
+ * Nothing is copied; the result is a view with a stride of 0 along every
+ * stretched axis. In a backward pass the gradient is summed back down to the
+ * original shape, because one element was read in several places.
+ *
+ * @param a      Tensor to stretch.
+ * @param shape  Shape to read it as, which `a`'s shape must broadcast to.
+ * @return The stretched view. It requires a gradient, and carries an
+ *         ExpandBackward as its grad_fn, if `a` requires a gradient and
+ *         recording is enabled.
+ * @throws std::invalid_argument if `a`'s shape does not broadcast to `shape`.
+ */
+Tensor expand(const Tensor& a, const std::vector<std::size_t>& shape);
+
+/**
  * Whether an operation on these inputs should be recorded for autograd.
  *
  * @param inputs  The operation's inputs.
@@ -35,11 +51,12 @@ void set_history(
  * Adds two tensors, recording the operation for autograd.
  *
  * @param a  Left operand.
- * @param b  Right operand, which must have exactly the shape of `a`.
- * @return The sum. It requires a gradient, and carries an AddBackward as its
+ * @param b  Right operand, whose shape must broadcast against `a`'s.
+ * @return The sum, of the two shapes broadcast together. It requires a gradient, and carries an AddBackward as its
  *         grad_fn, if either input requires a gradient and recording is
  *         enabled; otherwise it is a plain leaf.
- * @throws std::invalid_argument if the two shapes differ.
+ * @throws std::invalid_argument if the two shapes cannot be broadcast
+ *         together.
  */
 Tensor add(const Tensor& a, const Tensor& b);
 
@@ -47,8 +64,17 @@ Tensor add(const Tensor& a, const Tensor& b);
 Tensor operator+(const Tensor& a, const Tensor& b);
 
 /**
- * calude do this
- * @throws std::invalid_argument if the two shapes differ.
+ * Subtracts one tensor from another, recording the operation for autograd.
+ *
+ * @param a  Left operand, the tensor to subtract from.
+ * @param b  Right operand, subtracted from `a`, whose shape must broadcast
+ *           against `a`'s.
+ * @return The difference, of the two shapes broadcast together. It requires a
+ *         gradient, and carries a SubBackward as its grad_fn, if either input
+ *         requires a gradient and recording is enabled; otherwise it is a
+ *         plain leaf.
+ * @throws std::invalid_argument if the two shapes cannot be broadcast
+ *         together.
  */
 Tensor sub(const Tensor& a, const Tensor& b);
 
@@ -56,23 +82,28 @@ Tensor sub(const Tensor& a, const Tensor& b);
 Tensor operator-(const Tensor& a, const Tensor& b);
 
 /**
- * calude do this
- * @throws std::invalid_argument if the two shapes differ.
+ * Flips the sign of every element, recording the operation for autograd.
+ *
+ * @param a  Tensor to negate, which may be a view.
+ * @return The negated tensor. It requires a gradient, and carries a
+ *         NegBackward as its grad_fn, if `a` requires a gradient and recording
+ *         is enabled; otherwise it is a plain leaf.
  */
 Tensor neg(const Tensor& a);
 
-/** claude */
+/** Negates a tensor; see neg(). */
 Tensor operator-(const Tensor& a);
 
 /**
  * Calculates the Hadamard product of two tensors, recording the operation for autograd.
  *
  * @param a  Left operand.
- * @param b  Right operand, which must have exactly the shape of `a`.
- * @return The Hadamard product. It requires a gradient, and carries a MulBackward as its
+ * @param b  Right operand, whose shape must broadcast against `a`'s.
+ * @return The Hadamard product, of the two shapes broadcast together. It requires a gradient, and carries a MulBackward as its
  *         grad_fn, if either input requires a gradient and recording is
  *         enabled; otherwise it is a plain leaf.
- * @throws std::invalid_argument if the two shapes differ.
+ * @throws std::invalid_argument if the two shapes cannot be broadcast
+ *         together.
  */
 Tensor mul(const Tensor& a, const Tensor& b);
 
@@ -83,13 +114,14 @@ Tensor operator*(const Tensor& a, const Tensor& b);
  * Divides two tensors element by element, recording the operation.
  *
  * @param a  Left operand, the dividend.
- * @param b  Right operand, the divisor, which must have exactly the shape of
- *           `a`. Dividing by zero yields an infinity or a NaN rather than
+ * @param b  Right operand, the divisor, whose shape must broadcast against
+ *           `a`'s. Dividing by zero yields an infinity or a NaN rather than
  *           throwing.
  * @return The quotient. It requires a gradient, and carries a DivBackward as
  *         its grad_fn, if either input requires a gradient and recording is
  *         enabled; otherwise it is a plain leaf.
- * @throws std::invalid_argument if the two shapes differ.
+ * @throws std::invalid_argument if the two shapes cannot be broadcast
+ *         together.
  */
 Tensor div(const Tensor& a, const Tensor& b);
 
@@ -107,5 +139,30 @@ Tensor operator/(const Tensor& a, const Tensor& b);
  *         gradient and recording is enabled; otherwise it is a plain leaf.
  */
 Tensor sum(const Tensor& a);
+
+
+/**
+ * Scalar forms of the element-wise operations.
+ *
+ * A plain number is treated as a 0-dimensional tensor and broadcast against
+ * the other operand, so `t * 2.0` scales every element. The number requires no
+ * gradient, so only the tensor's side of the graph is recorded.
+ */
+Tensor add(const Tensor& a, double b);
+Tensor add(double a, const Tensor& b);
+Tensor operator+(const Tensor& a, double b);
+Tensor operator+(double a, const Tensor& b);
+Tensor sub(const Tensor& a, double b);
+Tensor sub(double a, const Tensor& b);
+Tensor operator-(const Tensor& a, double b);
+Tensor operator-(double a, const Tensor& b);
+Tensor mul(const Tensor& a, double b);
+Tensor mul(double a, const Tensor& b);
+Tensor operator*(const Tensor& a, double b);
+Tensor operator*(double a, const Tensor& b);
+Tensor div(const Tensor& a, double b);
+Tensor div(double a, const Tensor& b);
+Tensor operator/(const Tensor& a, double b);
+Tensor operator/(double a, const Tensor& b);
 
 #endif

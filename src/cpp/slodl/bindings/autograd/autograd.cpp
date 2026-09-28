@@ -1,6 +1,9 @@
+#include <cstddef>
 #include <memory>
+#include <vector>
 
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 #include "slodl/autograd/autograd.hpp"
 #include "slodl/autograd/grad_mode.hpp"
@@ -19,14 +22,20 @@ void register_autograd(py::module_& m) {
             return "<" + self.name + ">";
         });
 
-    m.def("add", &add, py::arg("a"), py::arg("b"));
-    m.def("mul", &mul, py::arg("a"), py::arg("b"));
-    m.def("sub", &sub, py::arg("a"), py::arg("b"));
+    // Each op has scalar overloads too, so the tensor-to-tensor one has to be
+    // picked out explicitly.
+    using BinaryOp = Tensor (*)(const Tensor&, const Tensor&);
+    m.def("add", static_cast<BinaryOp>(&add), py::arg("a"), py::arg("b"));
+    m.def("mul", static_cast<BinaryOp>(&mul), py::arg("a"), py::arg("b"));
+    m.def("sub", static_cast<BinaryOp>(&sub), py::arg("a"), py::arg("b"));
     m.def("neg", &neg, py::arg("a"));
-    // A lambda, not &div: <cstdlib> also declares std::div.
-    m.def("div", [](const Tensor& a, const Tensor& b) { return div(a, b); },
-          py::arg("a"), py::arg("b"));
+    m.def("div", static_cast<BinaryOp>(&div), py::arg("a"), py::arg("b"));
     m.def("sum", &sum, py::arg("a"));
+    m.def("expand",
+          [](const Tensor& a, std::vector<std::size_t> shape) {
+              return expand(a, shape);
+          },
+          py::arg("a"), py::arg("shape"));
 
     m.def("is_grad_enabled", &is_grad_enabled);
     m.def("set_grad_enabled", &set_grad_enabled, py::arg("enabled"));

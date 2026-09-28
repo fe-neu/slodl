@@ -1,29 +1,14 @@
 #ifndef OPS_HPP
 #define OPS_HPP
 
+#include <array>
 #include <cstddef>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "slodl/tensor/shape.hpp"
 #include "slodl/tensor/tensor.hpp"
-
-/**
- * Number of elements a tensor of this shape holds.
- *
- * @param shape  Dimensions, as returned by Tensor::shape().
- * @return The product of all dimensions; 1 for a 0-dimensional shape, and 0
- *         if any dimension is 0.
- */
-std::size_t element_count(const std::vector<std::size_t>& shape);
-
-/**
- * Renders a shape for error messages, e.g. "[2, 3]" or "[]".
- *
- * @param shape  Dimensions, as returned by Tensor::shape().
- * @return The dimensions, comma-separated, in square brackets.
- */
-std::string format_shape(const std::vector<std::size_t>& shape);
 
 /**
  * Applies an operation to each pair of logical elements of two tensors.
@@ -52,44 +37,19 @@ Tensor elementwise(const Tensor& a, const Tensor& b, Operation operation) {
             format_shape(b.shape()) + " do not match");
     }
 
-    // Walking the inputs by hand: data() points at the view's first element,
-    // but the elements after it are strides apart, not adjacent.
     const std::vector<std::size_t>& dims = a.shape();
     Tensor out(dims);
-
-    const std::size_t count = element_count(dims);
-    if (count == 0) {
-        return out;
-    }
 
     const double* left = a.data();
     const double* right = b.data();
     double* result = out.data();
-    const std::vector<std::size_t>& left_strides = a.element_strides();
-    const std::vector<std::size_t>& right_strides = b.element_strides();
 
-    // The odometer: `counter` holds the current index per axis and the two
-    // offsets follow it, so advancing one element is a pair of additions. When
-    // an axis reaches its length it is rewound and the next axis carries.
-    std::vector<std::size_t> counter(dims.size(), 0);
-    std::size_t left_offset = 0;
-    std::size_t right_offset = 0;
-
-    for (std::size_t i = 0; i < count; i++) {
-        result[i] = operation(left[left_offset], right[right_offset]);
-
-        for (std::size_t axis = dims.size(); axis-- > 0;) {
-            counter[axis]++;
-            left_offset += left_strides[axis];
-            right_offset += right_strides[axis];
-            if (counter[axis] < dims[axis]) {
-                break;
-            }
-            counter[axis] = 0;
-            left_offset -= dims[axis] * left_strides[axis];
-            right_offset -= dims[axis] * right_strides[axis];
-        }
-    }
+    for_each_offset<2>(
+        dims,
+        {&a.element_strides(), &b.element_strides()},
+        [&](std::size_t i, const std::array<std::size_t, 2>& offsets) {
+            result[i] = operation(left[offsets[0]], right[offsets[1]]);
+        });
     return out;
 }
 
@@ -111,38 +71,18 @@ Tensor elementwise(const Tensor& a, const Tensor& b, Operation operation) {
  */
 template <typename Operation>
 Tensor unary_elementwise(const Tensor& a, Operation operation) {
-
-    // Walking the inputs by hand: data() points at the view's first element,
-    // but the elements after it are strides apart, not adjacent.
     const std::vector<std::size_t>& dims = a.shape();
     Tensor out(dims);
 
-    const std::size_t count = element_count(dims);
-    if (count == 0) {
-        return out;
-    }
-
     const double* element = a.data();
     double* result = out.data();
-    const std::vector<std::size_t>& strides = a.element_strides();
 
-    // The same odometer as elementwise(), over one tensor instead of two.
-    std::vector<std::size_t> counter(dims.size(), 0);
-    std::size_t offset = 0;
-
-    for (std::size_t i = 0; i < count; i++) {
-        result[i] = operation(element[offset]);
-
-        for (std::size_t axis = dims.size(); axis-- > 0;) {
-            counter[axis]++;
-            offset += strides[axis];
-            if (counter[axis] < dims[axis]) {
-                break;
-            }
-            counter[axis] = 0;
-            offset -= dims[axis] * strides[axis];
-        }
-    }
+    for_each_offset<1>(
+        dims,
+        {&a.element_strides()},
+        [&](std::size_t i, const std::array<std::size_t, 1>& offsets) {
+            result[i] = operation(element[offsets[0]]);
+        });
     return out;
 }
 
@@ -161,34 +101,15 @@ Tensor unary_elementwise(const Tensor& a, Operation operation) {
  */
 template <typename Operation>
 double reduce_all(const Tensor& a, double initial, Operation operation) {
-    const std::vector<std::size_t>& dims = a.shape();
-    const std::size_t count = element_count(dims);
-
     double accumulated = initial;
-    if (count == 0) {
-        return accumulated;
-    }
-
     const double* elements = a.data();
-    const std::vector<std::size_t>& strides = a.element_strides();
 
-    // The same odometer as elementwise(), over one tensor instead of two.
-    std::vector<std::size_t> counter(dims.size(), 0);
-    std::size_t offset = 0;
-
-    for (std::size_t i = 0; i < count; i++) {
-        accumulated = operation(accumulated, elements[offset]);
-
-        for (std::size_t axis = dims.size(); axis-- > 0;) {
-            counter[axis]++;
-            offset += strides[axis];
-            if (counter[axis] < dims[axis]) {
-                break;
-            }
-            counter[axis] = 0;
-            offset -= dims[axis] * strides[axis];
-        }
-    }
+    for_each_offset<1>(
+        a.shape(),
+        {&a.element_strides()},
+        [&](std::size_t, const std::array<std::size_t, 1>& offsets) {
+            accumulated = operation(accumulated, elements[offsets[0]]);
+        });
     return accumulated;
 }
 
@@ -257,6 +178,23 @@ Tensor mul_kernel(const Tensor& a, const Tensor& b);
  * @throws std::invalid_argument if the two shapes differ.
  */
 Tensor div_kernel(const Tensor& a, const Tensor& b);
+
+/**
+ * Sums a tensor back down to a shape it was broadcast from.
+ *
+ * The reverse of stretching: every element of `a` is added into the element of
+ * the result it was read from, so an axis that was stretched is summed away
+ * and leading axes disappear entirely.
+ *
+ * A kernel: it records no autograd history.
+ *
+ * @param a      Tensor to reduce, whose shape `shape` must broadcast to.
+ * @param shape  Shape to reduce to.
+ * @return A newly allocated, contiguous tensor of `shape` holding the sums,
+ *         or a copy of `a` when the shapes already match.
+ * @throws std::invalid_argument if `shape` does not broadcast to `a`'s shape.
+ */
+Tensor sum_to_size(const Tensor& a, const std::vector<std::size_t>& shape);
 
 /**
  * Adds up every element of a tensor.

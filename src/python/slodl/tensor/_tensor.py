@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 import numpy.typing as npt
 
@@ -320,9 +322,9 @@ class Tensor:
 
         Parameters
         ----------
-        other : Tensor
-            A tensor of this tensor's shape. Shapes are not broadcast
-            against each other yet.
+        other : Tensor or float
+            A tensor whose shape broadcasts against this one's, or a number,
+            which is added to every element.
 
         Returns
         -------
@@ -333,17 +335,30 @@ class Tensor:
         Raises
         ------
         ValueError
-            If the shapes differ.
+            If the shapes cannot be broadcast together.
 
         Examples
         --------
         >>> from slodl import Tensor
         >>> Tensor([1, 2]) + Tensor([10, 20])
         Tensor([11, 22])
+
+        A row is added to every row of a matrix, and a number to every
+        element:
+
+        >>> Tensor([[1, 2], [3, 4]]) + Tensor([10, 20])
+        Tensor([[11, 22],
+                [13, 24]])
+        >>> 100 + Tensor([1, 2])
+        Tensor([101, 102])
         """
-        if not isinstance(other, Tensor):
-            return NotImplemented
-        return Tensor._from_impl(self._impl + other._impl)
+        if isinstance(other, Tensor):
+            return Tensor._from_impl(self._impl + other._impl)
+        if isinstance(other, (int, float)):
+            return Tensor._from_impl(self._impl + float(other))
+        return NotImplemented
+
+    __radd__ = __add__
 
     def __mul__(self, other: Tensor) -> Tensor:
         """Multiply two tensors element by element.
@@ -352,9 +367,9 @@ class Tensor:
 
         Parameters
         ----------
-        other : Tensor
-            A tensor of this tensor's shape. Shapes are not broadcast
-            against each other yet, so a plain number is not accepted.
+        other : Tensor or float
+            A tensor whose shape broadcasts against this one's, or a number,
+            which scales every element.
 
         Returns
         -------
@@ -365,26 +380,32 @@ class Tensor:
         Raises
         ------
         ValueError
-            If the shapes differ.
+            If the shapes cannot be broadcast together.
 
         Examples
         --------
         >>> from slodl import Tensor
         >>> Tensor([2, 3]) * Tensor([10, 20])
         Tensor([20, 60])
+        >>> Tensor([1, 2]) * 3
+        Tensor([3, 6])
         """
-        if not isinstance(other, Tensor):
-            return NotImplemented
-        return Tensor._from_impl(self._impl * other._impl)
+        if isinstance(other, Tensor):
+            return Tensor._from_impl(self._impl * other._impl)
+        if isinstance(other, (int, float)):
+            return Tensor._from_impl(self._impl * float(other))
+        return NotImplemented
+
+    __rmul__ = __mul__
 
     def __sub__(self, other: Tensor) -> Tensor:
         """Subtract another tensor, element by element.
 
         Parameters
         ----------
-        other : Tensor
-            A tensor of this tensor's shape. Shapes are not broadcast
-            against each other yet, so a plain number is not accepted.
+        other : Tensor or float
+            A tensor whose shape broadcasts against this one's, or a number,
+            which is subtracted from every element.
 
         Returns
         -------
@@ -395,26 +416,36 @@ class Tensor:
         Raises
         ------
         ValueError
-            If the shapes differ.
+            If the shapes cannot be broadcast together.
 
         Examples
         --------
         >>> from slodl import Tensor
         >>> Tensor([10, 3]) - Tensor([4, 8])
         Tensor([6, -5])
+        >>> 10 - Tensor([1, 2])
+        Tensor([9, 8])
         """
-        if not isinstance(other, Tensor):
+        if isinstance(other, Tensor):
+            return Tensor._from_impl(self._impl - other._impl)
+        if isinstance(other, (int, float)):
+            return Tensor._from_impl(self._impl - float(other))
+        return NotImplemented
+
+    def __rsub__(self, other: float) -> Tensor:
+        """Subtract this tensor from a number, element by element."""
+        if not isinstance(other, (int, float)):
             return NotImplemented
-        return Tensor._from_impl(self._impl - other._impl)
+        return Tensor._from_impl(float(other) - self._impl)
 
     def __truediv__(self, other: Tensor) -> Tensor:
         """Divide by another tensor, element by element.
 
         Parameters
         ----------
-        other : Tensor
-            The divisor, of this tensor's shape. Shapes are not broadcast
-            against each other yet, so a plain number is not accepted.
+        other : Tensor or float
+            A tensor whose shape broadcasts against this one's, or a number,
+            which divides every element.
 
         Returns
         -------
@@ -425,7 +456,7 @@ class Tensor:
         Raises
         ------
         ValueError
-            If the shapes differ.
+            If the shapes cannot be broadcast together.
 
         Notes
         -----
@@ -437,10 +468,20 @@ class Tensor:
         >>> from slodl import Tensor
         >>> Tensor([6, 9]) / Tensor([2, 3])
         Tensor([3, 3])
+        >>> Tensor([6, 9]) / 3
+        Tensor([2, 3])
         """
-        if not isinstance(other, Tensor):
+        if isinstance(other, Tensor):
+            return Tensor._from_impl(self._impl / other._impl)
+        if isinstance(other, (int, float)):
+            return Tensor._from_impl(self._impl / float(other))
+        return NotImplemented
+
+    def __rtruediv__(self, other: float) -> Tensor:
+        """Divide a number by this tensor, element by element."""
+        if not isinstance(other, (int, float)):
             return NotImplemented
-        return Tensor._from_impl(self._impl / other._impl)
+        return Tensor._from_impl(float(other) / self._impl)
 
     def __neg__(self) -> Tensor:
         """Flip the sign of every element.
@@ -458,6 +499,44 @@ class Tensor:
         Tensor([-1, 2, -3])
         """
         return Tensor._from_impl(-self._impl)
+
+    def expand(self, shape: Sequence[int]) -> Tensor:
+        """Read this tensor as though it had a larger shape.
+
+        Dimensions of size 1 are stretched, and dimensions this tensor does
+        not have are added on the left. Nothing is copied: the stretched
+        positions all read the same element.
+
+        Parameters
+        ----------
+        shape : sequence of int
+            The shape to read this tensor as. This tensor's shape must
+            broadcast to it.
+
+        Returns
+        -------
+        Tensor
+            A view sharing this tensor's storage.
+
+        Raises
+        ------
+        ValueError
+            If this tensor's shape does not broadcast to ``shape``.
+
+        Notes
+        -----
+        The operators broadcast on their own, so this is rarely needed
+        directly. In a backward pass the gradient is summed back down to the
+        original shape, because one element was read in several places.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([1, 2, 3]).expand([2, 3])
+        Tensor([[1, 2, 3],
+                [1, 2, 3]])
+        """
+        return Tensor._from_impl(self._impl.expand([int(d) for d in shape]))
 
     def sum(self) -> Tensor:
         """Add up every element of this tensor.

@@ -1,21 +1,5 @@
 #include "slodl/tensor/ops.hpp"
 
-std::size_t element_count(const std::vector<std::size_t>& shape) {
-    std::size_t count = 1;
-    for (const std::size_t dim : shape) {
-        count *= dim;
-    }
-    return count;
-}
-
-std::string format_shape(const std::vector<std::size_t>& shape) {
-    std::string out = "[";
-    for (std::size_t i = 0; i < shape.size(); i++) {
-        out += (i ? ", " : "") + std::to_string(shape[i]);
-    }
-    return out + "]";
-}
-
 Tensor add_kernel(const Tensor& a, const Tensor& b) {
     return elementwise(a, b, [](double left, double right) {
         return left + right;
@@ -52,4 +36,25 @@ Tensor sum_kernel(const Tensor& a) {
         return accumulated + element;
     });
     return Tensor({}, total);
+}
+
+Tensor sum_to_size(const Tensor& a, const std::vector<std::size_t>& shape) {
+    if (a.shape() == shape) {
+        return a.clone();
+    }
+
+    Tensor out(shape, 0.0);
+    double* totals = out.data();
+    const double* elements = a.data();
+
+    const std::vector<std::size_t> out_strides =
+        broadcast_strides(shape, out.element_strides(), a.shape());
+
+    for_each_offset<2>(
+        a.shape(),
+        {&a.element_strides(), &out_strides},
+        [&](std::size_t, const std::array<std::size_t, 2>& offsets) {
+            totals[offsets[1]] += elements[offsets[0]];
+        });
+    return out;
 }

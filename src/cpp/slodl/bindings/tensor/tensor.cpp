@@ -86,19 +86,37 @@ void register_tensor(py::module_& m) {
                 view.copy_(other);
             },
             py::arg("index"), py::arg("value"))
-        .def("__add__", &add, py::arg("other"))
-        .def("__mul__", &mul, py::arg("other"))
+        // Each operator takes a tensor or a plain number; a number is
+        // broadcast like a 0-dimensional tensor.
+        .def("__add__", [](const Tensor& self, const Tensor& other) {
+                return add(self, other); }, py::arg("other"))
+        .def("__add__", [](const Tensor& self, double other) {
+                return add(self, other); }, py::arg("other"))
+        .def("__radd__", [](const Tensor& self, double other) {
+                return add(other, self); }, py::arg("other"))
+        .def("__mul__", [](const Tensor& self, const Tensor& other) {
+                return mul(self, other); }, py::arg("other"))
+        .def("__mul__", [](const Tensor& self, double other) {
+                return mul(self, other); }, py::arg("other"))
+        .def("__rmul__", [](const Tensor& self, double other) {
+                return mul(other, self); }, py::arg("other"))
+        .def("__rsub__", [](const Tensor& self, double other) {
+                return sub(other, self); }, py::arg("other"))
+        .def("__rtruediv__", [](const Tensor& self, double other) {
+                return div(other, self); }, py::arg("other"))
+        .def("expand", [](const Tensor& self, std::vector<std::size_t> shape) {
+                return expand(self, shape); }, py::arg("shape"))
         .def("__sub__", [](const Tensor& self, const Tensor& other) {
-                return sub(self, other);
-             },
-             py::arg("other"))
+                return sub(self, other); }, py::arg("other"))
+        .def("__sub__", [](const Tensor& self, double other) {
+                return sub(self, other); }, py::arg("other"))
         .def("__neg__", [](const Tensor& self) { return neg(self); })
         // A lambda, not &div: <cstdlib> also declares std::div, so taking the
         // address is ambiguous.
         .def("__truediv__", [](const Tensor& self, const Tensor& other) {
-                return div(self, other);
-             },
-             py::arg("other"))
+                return div(self, other); }, py::arg("other"))
+        .def("__truediv__", [](const Tensor& self, double other) {
+                return div(self, other); }, py::arg("other"))
         .def("sum", &sum)
         // Autograd. requires_grad is a property, like in PyTorch, and
         // requires_grad_ returns nothing: the Python layer returns its own

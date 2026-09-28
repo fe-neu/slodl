@@ -247,3 +247,102 @@ TEST_CASE("div_kernel rejects mismatched shapes", "[tensor]") {
     CHECK_THROWS_AS(div_kernel(Tensor({2}), Tensor({3})),
                     std::invalid_argument);
 }
+
+TEST_CASE("expand stretches without copying", "[tensor]") {
+    Tensor row({3}, {1.0, 2.0, 3.0});
+
+    Tensor wide = row.expand({2, 3});
+
+    CHECK(wide.shape() == std::vector<std::size_t>{2, 3});
+    CHECK(wide.element_strides() == std::vector<std::size_t>{0, 1});
+    CHECK(wide.data() == row.data());
+    CHECK(wide[0][2].item() == 3.0);
+    CHECK(wide[1][2].item() == 3.0);
+}
+
+TEST_CASE("expand stretches a dimension of one", "[tensor]") {
+    Tensor column({2, 1}, {10.0, 20.0});
+
+    Tensor wide = column.expand({2, 3});
+
+    CHECK(wide[0][0].item() == 10.0);
+    CHECK(wide[0][2].item() == 10.0);
+    CHECK(wide[1][1].item() == 20.0);
+}
+
+TEST_CASE("expand of a scalar fills every position", "[tensor]") {
+    Tensor wide = Tensor({}, 7.0).expand({2, 2});
+
+    CHECK(wide[0][0].item() == 7.0);
+    CHECK(wide[1][1].item() == 7.0);
+}
+
+TEST_CASE("a stretched view writes through to its source", "[tensor]") {
+    Tensor row({3}, {1.0, 2.0, 3.0});
+    Tensor wide = row.expand({2, 3});
+
+    row[0].fill_(99.0);
+
+    CHECK(wide[0][0].item() == 99.0);
+    CHECK(wide[1][0].item() == 99.0);
+}
+
+TEST_CASE("kernels read stretched views correctly", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor row({3}, {10.0, 20.0, 30.0});
+
+    Tensor sum = add_kernel(matrix, row.expand({2, 3}));
+
+    CHECK(sum[0][0].item() == 11.0);
+    CHECK(sum[1][2].item() == 36.0);
+    CHECK(sum_kernel(row.expand({2, 3})).item() == 120.0);
+}
+
+TEST_CASE("sum_to_size sums away a stretched axis", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor reduced = sum_to_size(matrix, {3});
+
+    CHECK(reduced.shape() == std::vector<std::size_t>{3});
+    CHECK(reduced[0].item() == 5.0);
+    CHECK(reduced[1].item() == 7.0);
+    CHECK(reduced[2].item() == 9.0);
+}
+
+TEST_CASE("sum_to_size keeps a dimension of one", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor reduced = sum_to_size(matrix, {2, 1});
+
+    CHECK(reduced.shape() == std::vector<std::size_t>{2, 1});
+    CHECK(reduced[0][0].item() == 6.0);
+    CHECK(reduced[1][0].item() == 15.0);
+}
+
+TEST_CASE("sum_to_size down to a scalar totals everything", "[tensor]") {
+    CHECK(sum_to_size(Tensor({2, 2}, {1.0, 2.0, 3.0, 4.0}), {}).item() == 10.0);
+}
+
+TEST_CASE("sum_to_size copies when the shape already matches", "[tensor]") {
+    Tensor t({2}, {1.0, 2.0});
+
+    Tensor same = sum_to_size(t, {2});
+
+    CHECK(same[0].item() == 1.0);
+    CHECK(same.data() != t.data());
+}
+
+TEST_CASE("sum_to_size undoes an expand", "[tensor]") {
+    Tensor row({3}, {1.0, 2.0, 3.0});
+
+    // Stretching to [4, 3] reads each element four times, so summing back
+    // multiplies by four.
+    Tensor reduced = sum_to_size(row.expand({4, 3}), {3});
+
+    CHECK(reduced[0].item() == 4.0);
+    CHECK(reduced[2].item() == 12.0);
+}
+
+TEST_CASE("sum_to_size rejects a shape it cannot have come from", "[tensor]") {
+    CHECK_THROWS_AS(sum_to_size(Tensor({2, 3}), {2}), std::invalid_argument);
+}

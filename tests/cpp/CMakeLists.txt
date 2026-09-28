@@ -15,6 +15,7 @@ add_executable(slodl_cpp_tests
     tensor/test_tensor.cpp
     tensor/test_tensor_storage.cpp
     tensor/test_ops.cpp
+    tensor/test_shape.cpp
     autograd/test_autograd.cpp
     autograd/test_grad_mode.cpp
     autograd/test_ops.cpp

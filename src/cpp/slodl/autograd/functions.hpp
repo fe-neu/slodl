@@ -128,4 +128,24 @@ class SumBackward : public Node {
     protected:
         std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
 };
+
+/**
+ * Backward of stretching a tensor to a larger shape.
+ *
+ * Expanding reads one element in several places, so in reverse every place it
+ * was read from contributes: the gradient is summed back down to the input's
+ * shape. A copy forwards is a sum backwards, the mirror of a reduction, whose
+ * gradient is a copy.
+ *
+ * Only the input's shape is needed, which Node already records in
+ * input_shapes, so this node is stateless.
+ */
+class ExpandBackward : public Node {
+    public:
+        ExpandBackward();
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+};
+
 #endif
