@@ -346,3 +346,73 @@ TEST_CASE("sum_to_size undoes an expand", "[tensor]") {
 TEST_CASE("sum_to_size rejects a shape it cannot have come from", "[tensor]") {
     CHECK_THROWS_AS(sum_to_size(Tensor({2, 3}), {2}), std::invalid_argument);
 }
+
+TEST_CASE("transpose swaps axes without copying", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor flipped = matrix.transpose();
+
+    CHECK(flipped.shape() == std::vector<std::size_t>{3, 2});
+    CHECK(flipped.element_strides() == std::vector<std::size_t>{1, 3});
+    CHECK(flipped.data() == matrix.data());
+
+    CHECK(flipped[0][0].item() == 1.0);
+    CHECK(flipped[0][1].item() == 4.0);
+    CHECK(flipped[2][1].item() == 6.0);
+}
+
+TEST_CASE("transpose writes through to its source", "[tensor]") {
+    Tensor matrix({2, 2}, {1.0, 2.0, 3.0, 4.0});
+
+    matrix.transpose()[0][1].fill_(99.0);
+
+    CHECK(matrix[1][0].item() == 99.0);
+}
+
+TEST_CASE("transposing twice gives back the original layout", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor twice = matrix.transpose().transpose();
+
+    CHECK(twice.shape() == matrix.shape());
+    CHECK(twice.element_strides() == matrix.element_strides());
+}
+
+TEST_CASE("transpose picks out any two axes", "[tensor]") {
+    Tensor cube({2, 3, 4});
+
+    CHECK(cube.transpose(0, 2).shape() == std::vector<std::size_t>{4, 3, 2});
+    CHECK(cube.transpose(1, 2).shape() == std::vector<std::size_t>{2, 4, 3});
+    CHECK(cube.transpose(1, 1).shape() == std::vector<std::size_t>{2, 3, 4});
+}
+
+TEST_CASE("transpose rejects axes the tensor does not have", "[tensor]") {
+    Tensor matrix({2, 2});
+
+    CHECK_THROWS_AS(matrix.transpose(0, 2), std::out_of_range);
+    CHECK_THROWS_AS(Tensor({3}).transpose(), std::out_of_range);
+    CHECK_THROWS_AS(Tensor({}).transpose(0, 0), std::out_of_range);
+}
+
+TEST_CASE("kernels read a transposed view correctly", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor other({3, 2}, {10.0, 20.0, 30.0, 40.0, 50.0, 60.0});
+
+    Tensor sum = add_kernel(matrix.transpose(), other);
+
+    CHECK(sum[0][0].item() == 11.0);
+    CHECK(sum[0][1].item() == 24.0);   // 4 + 20
+    CHECK(sum[2][1].item() == 66.0);   // 6 + 60
+    CHECK(sum_kernel(matrix.transpose()).item() == 21.0);
+}
+
+TEST_CASE("cloning a transposed view compacts it", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor compact = matrix.transpose().clone();
+
+    CHECK(compact.shape() == std::vector<std::size_t>{3, 2});
+    CHECK(compact.element_strides() == std::vector<std::size_t>{2, 1});
+    CHECK(compact[0][1].item() == 4.0);
+    CHECK(compact[2][0].item() == 3.0);
+}

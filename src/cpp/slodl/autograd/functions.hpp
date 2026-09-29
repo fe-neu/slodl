@@ -108,6 +108,27 @@ class DivBackward : public Node {
 };
 
 /**
+ * Backward of swapping two axes.
+ *
+ * Transposing only changes the order the elements are read in, so the gradient
+ * is routed straight back by undoing that reordering. Swapping the same two
+ * axes again is exactly that: transposing is its own inverse.
+ *
+ * The two axes are all this node needs from the forward pass.
+ */
+class TransposeBackward : public Node {
+    public:
+        TransposeBackward(std::size_t dim0, std::size_t dim1);
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+
+    private:
+        std::size_t dim0;
+        std::size_t dim1;
+};
+
+/**
  * Backward of summing every element.
  *
  * A sum is linear in each element: nudging one element moves the total by the

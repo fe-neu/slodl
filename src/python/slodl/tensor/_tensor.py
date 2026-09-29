@@ -571,6 +571,67 @@ class Tensor:
         """
         return Tensor._from_impl(self._impl.mean())
 
+    def transpose(self, dim0: int = 0, dim1: int = 1) -> Tensor:
+        """Swap two of this tensor's axes.
+
+        Parameters
+        ----------
+        dim0, dim1 : int, default 0 and 1
+            The axes to swap. The defaults flip a matrix.
+
+        Returns
+        -------
+        Tensor
+            A view sharing this tensor's storage with those axes exchanged.
+            It requires a gradient, and records the operation, if this tensor
+            does.
+
+        Raises
+        ------
+        IndexError
+            If either axis is not a dimension of this tensor.
+
+        See Also
+        --------
+        Tensor.T : The matrix case, spelled ``a.T``.
+        Tensor.clone : An independent, compact copy of the result.
+
+        Notes
+        -----
+        Nothing is copied, so writing through the result writes through to
+        this tensor.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([[1, 2, 3], [4, 5, 6]]).transpose()
+        Tensor([[1, 4],
+                [2, 5],
+                [3, 6]])
+
+        Any two axes can be swapped:
+
+        >>> from slodl import zeros
+        >>> zeros([2, 3, 4]).transpose(0, 2).shape
+        [4, 3, 2]
+        """
+        return Tensor._from_impl(self._impl.transpose(int(dim0), int(dim1)))
+
+    @property
+    def T(self) -> Tensor:
+        """Tensor : This tensor with its first two axes swapped.
+
+        Shorthand for :meth:`transpose` with its default axes.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([[1, 2], [3, 4]]).T
+        Tensor([[1, 3],
+                [2, 4]])
+        """
+        return Tensor._from_impl(self._impl.T)
+
     def sum(self) -> Tensor:
         """Add up every element of this tensor.
 

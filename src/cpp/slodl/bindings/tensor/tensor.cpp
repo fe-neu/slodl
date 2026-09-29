@@ -106,6 +106,14 @@ void register_tensor(py::module_& m) {
                 return div(other, self); }, py::arg("other"))
         .def("expand", [](const Tensor& self, std::vector<std::size_t> shape) {
                 return expand(self, shape); }, py::arg("shape"))
+        .def("transpose",
+             [](const Tensor& self, std::size_t dim0, std::size_t dim1) {
+                 return transpose(self, dim0, dim1);
+             },
+             py::arg("dim0") = 0, py::arg("dim1") = 1)
+        .def_property_readonly("T", [](const Tensor& self) {
+                return transpose(self);
+             })
         .def("__sub__", [](const Tensor& self, const Tensor& other) {
                 return sub(self, other); }, py::arg("other"))
         .def("__sub__", [](const Tensor& self, double other) {

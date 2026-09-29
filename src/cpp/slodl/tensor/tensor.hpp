@@ -116,6 +116,24 @@ public:
      */
     Tensor expand(const std::vector<std::size_t>& shape) const;
 
+    /**
+     * Reads this tensor with two of its axes swapped.
+     *
+     * Nothing is copied: the view has those axes' lengths and strides
+     * exchanged, so the same storage is walked in a different order. The
+     * result is generally not contiguous; use clone() for a compact copy.
+     *
+     * @param dim0  First axis to swap, the outermost by default.
+     * @param dim1  Second axis to swap, the next one by default, so that
+     *              transpose() alone flips a matrix. Swapping an axis with
+     *              itself is a no-op.
+     * @return A view sharing this tensor's storage, with no autograd history
+     *         of its own.
+     * @throws std::out_of_range if either axis is not a dimension of this
+     *         tensor.
+     */
+    Tensor transpose(std::size_t dim0 = 0, std::size_t dim1 = 1) const;
+
     /** Aliases `other`, like the copy constructor. To write values into this
      * tensor's existing elements, use copy_(). */
     Tensor& operator=(const Tensor& other) = default;

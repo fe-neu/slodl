@@ -103,6 +103,26 @@ Tensor Tensor::expand(const std::vector<std::size_t>& shape) const {
     );
 }
 
+Tensor Tensor::transpose(std::size_t dim0, std::size_t dim1) const {
+    if (dim0 >= dims.size() || dim1 >= dims.size()) {
+        throw std::out_of_range("transpose: axis out of range");
+    }
+
+    std::vector<std::size_t> new_dims = dims;
+    std::vector<std::size_t> new_strides = strides;
+
+    std::swap(new_dims[dim0], new_dims[dim1]);
+    std::swap(new_strides[dim0], new_strides[dim1]);
+
+    return Tensor(
+        storage,
+        start_offset,
+        std::move(new_strides),
+        std::move(new_dims)
+    );
+}
+
+
 Tensor Tensor::clone() const {
     const std::size_t element_count = get_size_for_dims(dims);
     std::vector<double> values(element_count);

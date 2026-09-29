@@ -129,6 +129,25 @@ Tensor div(const Tensor& a, const Tensor& b);
 Tensor operator/(const Tensor& a, const Tensor& b);
 
 /**
+ * Swaps two axes of a tensor, recording the operation for autograd.
+ *
+ * Nothing is copied: the result reads the same storage with those two axes'
+ * lengths and strides exchanged. In a backward pass the gradient is
+ * transposed back, since transposing is its own inverse.
+ *
+ * @param a     Tensor to transpose.
+ * @param dim0  First axis to swap, the outermost by default.
+ * @param dim1  Second axis to swap, the next one by default, so that
+ *              transpose(a) alone flips a matrix. Swapping an axis with
+ *              itself is a no-op.
+ * @return The transposed view. It requires a gradient, and carries a
+ *         TransposeBackward as its grad_fn, if `a` requires a gradient and
+ *         recording is enabled.
+ * @throws std::out_of_range if either axis is not a dimension of `a`.
+ */
+Tensor transpose(const Tensor& a, std::size_t dim0 = 0, std::size_t dim1 = 1);
+
+/**
  * Adds up every element of a tensor, recording the operation for autograd.
  *
  * This is how a tensor becomes the scalar that backward() can start from.

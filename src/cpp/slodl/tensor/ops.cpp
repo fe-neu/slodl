@@ -30,14 +30,6 @@ Tensor div_kernel(const Tensor& a, const Tensor& b) {
     });
 }
 
-
-Tensor sum_kernel(const Tensor& a) {
-    const double total = reduce_all(a, 0.0, [](double accumulated, double element) {
-        return accumulated + element;
-    });
-    return Tensor({}, total);
-}
-
 Tensor sum_to_size(const Tensor& a, const std::vector<std::size_t>& shape) {
     if (a.shape() == shape) {
         return a.clone();
@@ -58,3 +50,11 @@ Tensor sum_to_size(const Tensor& a, const std::vector<std::size_t>& shape) {
         });
     return out;
 }
+
+Tensor sum_kernel(const Tensor& a) {
+    const double total = reduce_all(a, 0.0, [](double accumulated, double element) {
+        return accumulated + element;
+    });
+    return Tensor({}, total);
+}
+

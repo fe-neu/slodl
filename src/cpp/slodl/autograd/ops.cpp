@@ -141,6 +141,15 @@ Tensor operator/(const Tensor& a, const Tensor& b) {
     return div(a, b);
 }
 
+Tensor transpose(const Tensor& a, std::size_t dim0, std::size_t dim1) {
+    Tensor result = a.transpose(dim0, dim1);
+
+    if (should_record({a})) {
+        set_history(result, std::make_shared<TransposeBackward>(dim0, dim1), {a});
+    }
+    return result;
+}
+
 Tensor sum(const Tensor& a) {
     Tensor result = sum_kernel(a);
 

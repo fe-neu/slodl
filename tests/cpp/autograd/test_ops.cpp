@@ -671,3 +671,65 @@ TEST_CASE("mean of a difference is a usable loss", "[autograd]") {
     CHECK((*prediction.grad())[0].item() == Catch::Approx(2.0));
     CHECK((*prediction.grad())[1].item() == Catch::Approx(4.0));
 }
+
+TEST_CASE("transpose swaps axes and records a graph", "[autograd]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    matrix.requires_grad_();
+
+    Tensor flipped = transpose(matrix);
+
+    CHECK(flipped.shape() == std::vector<std::size_t>{3, 2});
+    CHECK(flipped[0][1].item() == 4.0);
+    REQUIRE(flipped.autograd_meta()->grad_fn != nullptr);
+    CHECK(flipped.autograd_meta()->grad_fn->name == "TransposeBackward");
+}
+
+TEST_CASE("a gradient through transpose comes back in the original shape",
+          "[autograd]") {
+    Tensor matrix({2, 3}, 1.0);
+    matrix.requires_grad_();
+
+    sum(transpose(matrix)).backward();
+
+    REQUIRE(matrix.grad() != nullptr);
+    CHECK(matrix.grad()->shape() == std::vector<std::size_t>{2, 3});
+    CHECK((*matrix.grad())[0][0].item() == 1.0);
+}
+
+TEST_CASE("transpose routes each element's gradient back to its place",
+          "[autograd]") {
+    Tensor matrix({2, 3}, 1.0);
+    matrix.requires_grad_();
+
+    // Weighting the transposed view differently per position shows whether
+    // the gradient is un-transposed on the way back.
+    Tensor weights({3, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    sum(mul(transpose(matrix), weights)).backward();
+
+    CHECK(matrix.grad()->shape() == std::vector<std::size_t>{2, 3});
+    CHECK((*matrix.grad())[0][0].item() == 1.0);
+    CHECK((*matrix.grad())[0][1].item() == 3.0);
+    CHECK((*matrix.grad())[0][2].item() == 5.0);
+    CHECK((*matrix.grad())[1][0].item() == 2.0);
+    CHECK((*matrix.grad())[1][2].item() == 6.0);
+}
+
+TEST_CASE("transposing a non-default pair of axes is differentiable",
+          "[autograd]") {
+    Tensor cube({2, 3, 4}, 1.0);
+    cube.requires_grad_();
+
+    Tensor flipped = transpose(cube, 0, 2);
+    CHECK(flipped.shape() == std::vector<std::size_t>{4, 3, 2});
+
+    sum(flipped).backward();
+    CHECK(cube.grad()->shape() == std::vector<std::size_t>{2, 3, 4});
+}
+
+TEST_CASE("transpose records nothing inside a NoGradGuard", "[autograd]") {
+    Tensor matrix({2, 2}, 1.0);
+    matrix.requires_grad_();
+
+    NoGradGuard guard;
+    CHECK(transpose(matrix).is_leaf());
+}

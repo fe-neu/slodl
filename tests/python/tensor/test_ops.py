@@ -339,3 +339,57 @@ def test_a_mean_squared_error_loss():
     (error * error).mean().backward()
 
     assert [prediction.grad[i] for i in range(2)] == [2.0, 4.0]
+
+
+def test_transpose_swaps_the_axes():
+    flipped = Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).transpose()
+
+    assert flipped.shape == [3, 2]
+    assert [flipped[0][j] for j in range(2)] == [1.0, 4.0]
+    assert [flipped[2][j] for j in range(2)] == [3.0, 6.0]
+
+
+def test_the_T_property_transposes_a_matrix():
+    matrix = Tensor([[1.0, 2.0], [3.0, 4.0]])
+
+    assert matrix.T.shape == [2, 2]
+    assert matrix.T[0][1] == 3.0
+
+
+def test_the_free_function_transposes_like_the_method():
+    matrix = Tensor([[1.0, 2.0], [3.0, 4.0]])
+
+    assert slodl.transpose(matrix)[0][1] == matrix.transpose()[0][1]
+
+
+def test_transpose_takes_any_two_axes():
+    cube = slodl.zeros([2, 3, 4])
+
+    assert cube.transpose(0, 2).shape == [4, 3, 2]
+    assert cube.transpose(1, 2).shape == [2, 4, 3]
+
+
+def test_transpose_shares_storage():
+    matrix = Tensor([[1.0, 2.0], [3.0, 4.0]])
+
+    matrix.T[0][1] = 99.0
+
+    assert matrix[1][0] == 99.0
+
+
+def test_transpose_rejects_axes_the_tensor_does_not_have():
+    with pytest.raises(IndexError):
+        Tensor([[1.0, 2.0]]).transpose(0, 2)
+
+
+def test_a_gradient_through_transpose_comes_back_in_the_original_shape():
+    matrix = Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).requires_grad_()
+
+    flipped = matrix.T
+    assert flipped.grad_fn.name == "TransposeBackward"
+
+    (flipped * Tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])).sum().backward()
+
+    assert matrix.grad.shape == [2, 3]
+    assert [matrix.grad[0][j] for j in range(3)] == [1.0, 3.0, 5.0]
+    assert [matrix.grad[1][j] for j in range(3)] == [2.0, 4.0, 6.0]

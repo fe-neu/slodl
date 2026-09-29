@@ -304,3 +304,45 @@ def mean(a: Tensor) -> Tensor:
     Tensor([2, 4])
     """
     return Tensor._from_impl(_core.mean(a._impl))
+
+
+def transpose(a: Tensor, dim0: int = 0, dim1: int = 1) -> Tensor:
+    """Swap two axes of a tensor.
+
+    Parameters
+    ----------
+    a : Tensor
+        Tensor to transpose.
+    dim0, dim1 : int, default 0 and 1
+        The axes to swap. The defaults flip a matrix.
+
+    Returns
+    -------
+    Tensor
+        A view sharing ``a``'s storage with those axes exchanged. It requires
+        a gradient, and records the operation, if ``a`` does.
+
+    Raises
+    ------
+    IndexError
+        If either axis is not a dimension of ``a``.
+
+    See Also
+    --------
+    slodl.Tensor.transpose : The same operation, spelled ``a.transpose()``.
+    slodl.Tensor.T : The matrix case, spelled ``a.T``.
+
+    Notes
+    -----
+    Nothing is copied, so writing through the result writes through to ``a``.
+    Use :meth:`slodl.Tensor.clone` for an independent, compact copy.
+
+    Examples
+    --------
+    >>> from slodl import Tensor, transpose
+    >>> transpose(Tensor([[1, 2, 3], [4, 5, 6]]))
+    Tensor([[1, 4],
+            [2, 5],
+            [3, 6]])
+    """
+    return Tensor._from_impl(_core.transpose(a._impl, int(dim0), int(dim1)))

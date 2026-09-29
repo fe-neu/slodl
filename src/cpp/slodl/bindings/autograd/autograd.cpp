@@ -32,6 +32,11 @@ void register_autograd(py::module_& m) {
     m.def("div", static_cast<BinaryOp>(&div), py::arg("a"), py::arg("b"));
     m.def("sum", &sum, py::arg("a"));
     m.def("mean", &mean, py::arg("a"));
+    m.def("transpose",
+          [](const Tensor& a, std::size_t dim0, std::size_t dim1) {
+              return transpose(a, dim0, dim1);
+          },
+          py::arg("a"), py::arg("dim0") = 0, py::arg("dim1") = 1);
     m.def("expand",
           [](const Tensor& a, std::vector<std::size_t> shape) {
               return expand(a, shape);

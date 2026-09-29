@@ -12,6 +12,7 @@ from slodl.tensor import (
     ones,
     sub,
     sum,
+    transpose,
     zeros,
 )
 
@@ -31,6 +32,7 @@ __all__ = [
     "ones",
     "sub",
     "sum",
+    "transpose",
     "zeros",
     ]
 

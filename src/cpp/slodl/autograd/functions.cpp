@@ -32,7 +32,6 @@ MulBackward::MulBackward(const Tensor& a, const Tensor& b) : Node("MulBackward")
 std::vector<std::optional<Tensor>> MulBackward::backward(
     std::vector<std::optional<Tensor>> grad_out
 ) {
-
     return {mul_kernel(*grad_out[0], b), mul_kernel(*grad_out[0], a)};
 }
 
@@ -41,7 +40,6 @@ DivBackward::DivBackward(const Tensor& a, const Tensor& b) : Node("DivBackward")
 std::vector<std::optional<Tensor>> DivBackward::backward(
     std::vector<std::optional<Tensor>> grad_out
 ) {
-
     return {
         div_kernel(*grad_out[0], b),
         mul_kernel(
@@ -51,12 +49,20 @@ std::vector<std::optional<Tensor>> DivBackward::backward(
     };
 }
 
+TransposeBackward::TransposeBackward(std::size_t dim0, std::size_t dim1)
+    : Node("TransposeBackward"), dim0(dim0), dim1(dim1) {}
+
+std::vector<std::optional<Tensor>> TransposeBackward::backward(
+    std::vector<std::optional<Tensor>> grad_out
+) {
+    return {grad_out[0]->transpose(dim0, dim1)};
+}
+
 SumBackward::SumBackward() : Node("SumBackward") {}
 
 std::vector<std::optional<Tensor>> SumBackward::backward(
     std::vector<std::optional<Tensor>> grad_out
 ) {
-
     return {Tensor(input_shapes[0], grad_out[0]->item())};
 }
 
