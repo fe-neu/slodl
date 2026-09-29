@@ -108,6 +108,29 @@ class DivBackward : public Node {
 };
 
 /**
+ * Backward of matrix multiplication.
+ *
+ * Each element of the product is a dot product, so a given element of `a`
+ * contributed to a whole row of the result, weighted by a row of `b`.
+ * Collecting those contributions gives grad_a = grad @ b-transposed, and by
+ * the same argument grad_b = a-transposed @ grad. The shapes confirm it: only
+ * that arrangement lines up.
+ *
+ * Both inputs are needed, so this node saves them, detached.
+ */
+class MatMulBackward : public Node {
+    public:
+        MatMulBackward(const Tensor& a, const Tensor& b);
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+
+    private:
+        Tensor a;
+        Tensor b;
+};
+
+/**
  * Backward of swapping two axes.
  *
  * Transposing only changes the order the elements are read in, so the gradient

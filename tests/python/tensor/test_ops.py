@@ -393,3 +393,67 @@ def test_a_gradient_through_transpose_comes_back_in_the_original_shape():
     assert matrix.grad.shape == [2, 3]
     assert [matrix.grad[0][j] for j in range(3)] == [1.0, 3.0, 5.0]
     assert [matrix.grad[1][j] for j in range(3)] == [2.0, 4.0, 6.0]
+
+
+def test_matmul_multiplies_matrices():
+    product = Tensor([[1.0, 2.0], [3.0, 4.0]]) @ Tensor([[5.0, 6.0], [7.0, 8.0]])
+
+    assert product.shape == [2, 2]
+    assert [product[0][j] for j in range(2)] == [19.0, 22.0]
+    assert [product[1][j] for j in range(2)] == [43.0, 50.0]
+
+
+def test_matmul_is_not_elementwise():
+    a = Tensor([[1.0, 2.0], [3.0, 4.0]])
+    b = Tensor([[5.0, 6.0], [7.0, 8.0]])
+
+    assert (a @ b)[0][0] != (a * b)[0][0]
+
+
+def test_the_free_function_multiplies_like_the_operator():
+    a = Tensor([[1.0, 2.0]])
+    b = Tensor([[3.0], [4.0]])
+
+    assert slodl.matmul(a, b)[0][0] == (a @ b)[0][0] == 11.0
+
+
+def test_matmul_handles_non_square_shapes():
+    product = Tensor([[1.0, 2.0, 3.0]]) @ slodl.ones([3, 4])
+
+    assert product.shape == [1, 4]
+    assert product[0][0] == 6.0
+
+
+def test_matmul_rejects_shapes_that_do_not_line_up():
+    with pytest.raises(ValueError):
+        Tensor([[1.0, 2.0]]) @ Tensor([[1.0, 2.0]])
+
+    with pytest.raises(ValueError):
+        Tensor([1.0, 2.0]) @ Tensor([[1.0], [2.0]])
+
+
+def test_gradients_through_matmul_keep_each_operands_shape():
+    a = Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).requires_grad_()
+    b = slodl.ones([3, 4]).requires_grad_()
+
+    (a @ b).sum().backward()
+
+    assert a.grad.shape == [2, 3]
+    assert b.grad.shape == [3, 4]
+    assert a.grad[0][0] == 4.0      # b's first row sums to 4
+    assert b.grad[0][0] == 5.0      # a's first column sums to 5
+
+
+def test_a_linear_layer_forward_and_backward():
+    inputs = Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    weights = slodl.full([3, 2], 0.5).requires_grad_()
+    bias = slodl.full([2], 0.1).requires_grad_()
+
+    outputs = inputs @ weights + bias
+    assert outputs.shape == [2, 2]
+
+    outputs.mean().backward()
+
+    assert weights.grad.shape == [3, 2]
+    assert bias.grad.shape == [2]
+    assert bias.grad[0] == 0.5

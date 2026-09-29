@@ -571,6 +571,41 @@ class Tensor:
         """
         return Tensor._from_impl(self._impl.mean())
 
+    def __matmul__(self, other: Tensor) -> Tensor:
+        """Multiply two matrices.
+
+        This is the matrix product, not the element-wise one; ``*`` does
+        element-wise multiplication.
+
+        Parameters
+        ----------
+        other : Tensor
+            Right operand, of shape ``[k, m]`` when this tensor is
+            ``[n, k]``.
+
+        Returns
+        -------
+        Tensor
+            The product, of shape ``[n, m]``, recording the operation if
+            either operand requires a gradient.
+
+        Raises
+        ------
+        ValueError
+            If either operand is not 2-dimensional, or if the shapes do not
+            line up.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([[1, 2], [3, 4]]) @ Tensor([[5, 6], [7, 8]])
+        Tensor([[19, 22],
+                [43, 50]])
+        """
+        if not isinstance(other, Tensor):
+            return NotImplemented
+        return Tensor._from_impl(self._impl @ other._impl)
+
     def transpose(self, dim0: int = 0, dim1: int = 1) -> Tensor:
         """Swap two of this tensor's axes.
 

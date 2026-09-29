@@ -733,3 +733,118 @@ TEST_CASE("transpose records nothing inside a NoGradGuard", "[autograd]") {
     NoGradGuard guard;
     CHECK(transpose(matrix).is_leaf());
 }
+
+TEST_CASE("matmul records a graph", "[autograd]") {
+    Tensor a({2, 3}, 1.0);
+    Tensor b({3, 2}, 1.0);
+    a.requires_grad_();
+
+    Tensor product = matmul(a, b);
+
+    CHECK(product.shape() == std::vector<std::size_t>{2, 2});
+    REQUIRE(product.autograd_meta()->grad_fn != nullptr);
+    CHECK(product.autograd_meta()->grad_fn->name == "MatMulBackward");
+}
+
+TEST_CASE("MatMulBackward returns gradients of each input's shape",
+          "[autograd]") {
+    Tensor a({2, 3}, 1.0);
+    Tensor b({3, 4}, 1.0);
+    a.requires_grad_();
+    b.requires_grad_();
+
+    sum(matmul(a, b)).backward();
+
+    CHECK(a.grad()->shape() == std::vector<std::size_t>{2, 3});
+    CHECK(b.grad()->shape() == std::vector<std::size_t>{3, 4});
+}
+
+TEST_CASE("a gradient of ones through matmul sums the other operand",
+          "[autograd]") {
+    Tensor a({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    Tensor b({2, 2}, {5.0, 6.0, 7.0, 8.0});
+    a.requires_grad_();
+    b.requires_grad_();
+
+    sum(matmul(a, b)).backward();
+
+    // d/da_ik sum(a @ b) = sum over j of b_kj, i.e. b's row sums.
+    CHECK((*a.grad())[0][0].item() == 11.0);   // 5 + 6
+    CHECK((*a.grad())[0][1].item() == 15.0);   // 7 + 8
+    CHECK((*a.grad())[1][0].item() == 11.0);
+
+    // d/db_kj = sum over i of a_ik, i.e. a's column sums.
+    CHECK((*b.grad())[0][0].item() == 4.0);    // 1 + 3
+    CHECK((*b.grad())[1][0].item() == 6.0);    // 2 + 4
+}
+
+TEST_CASE("matmul gradients match finite differences", "[autograd]") {
+    const double step = 1e-6;
+    const std::vector<double> a_values = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
+    const std::vector<double> b_values = {0.5, 1.5, 2.5, 3.5, 4.5, 5.5};
+    const std::vector<double> weights = {1.0, 2.0, 3.0, 4.0};
+
+    Tensor a({2, 3}, a_values);
+    Tensor b({3, 2}, b_values);
+    a.requires_grad_();
+    b.requires_grad_();
+
+    // A weighted sum, so every entry of the product matters differently.
+    sum(mul(matmul(a, b), Tensor({2, 2}, weights))).backward();
+
+    const auto loss = [&](std::vector<double> left, std::vector<double> right) {
+        return sum_kernel(mul_kernel(
+            matmul_kernel(Tensor({2, 3}, std::move(left)),
+                          Tensor({3, 2}, std::move(right))),
+            Tensor({2, 2}, weights))).item();
+    };
+
+    for (std::size_t index = 0; index < a_values.size(); index++) {
+        std::vector<double> up = a_values;
+        std::vector<double> down = a_values;
+        up[index] += step;
+        down[index] -= step;
+
+        const double numeric = (loss(up, b_values) - loss(down, b_values)) / (2 * step);
+        const double analytic = (*a.grad())[index / 3][index % 3].item();
+        CHECK(analytic == Catch::Approx(numeric).epsilon(1e-6));
+    }
+
+    for (std::size_t index = 0; index < b_values.size(); index++) {
+        std::vector<double> up = b_values;
+        std::vector<double> down = b_values;
+        up[index] += step;
+        down[index] -= step;
+
+        const double numeric = (loss(a_values, up) - loss(a_values, down)) / (2 * step);
+        const double analytic = (*b.grad())[index / 2][index % 2].item();
+        CHECK(analytic == Catch::Approx(numeric).epsilon(1e-6));
+    }
+}
+
+TEST_CASE("a linear layer's gradients flow to weights and bias",
+          "[autograd]") {
+    Tensor inputs({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor weights({3, 2}, 0.5);
+    Tensor bias({2}, 0.1);
+    weights.requires_grad_();
+    bias.requires_grad_();
+
+    Tensor outputs = add(matmul(inputs, weights), bias);
+    CHECK(outputs.shape() == std::vector<std::size_t>{2, 2});
+
+    mean(outputs).backward();
+
+    CHECK(weights.grad()->shape() == std::vector<std::size_t>{3, 2});
+    CHECK(bias.grad()->shape() == std::vector<std::size_t>{2});
+
+    // Each bias element takes part in both rows, averaged over four outputs.
+    CHECK((*bias.grad())[0].item() == Catch::Approx(0.5));
+    // d/dw_kj mean(x @ w) = (sum over i of x_ik) / 4
+    CHECK((*weights.grad())[0][0].item() == Catch::Approx(1.25));
+}
+
+TEST_CASE("matmul rejects shapes that do not line up", "[autograd]") {
+    CHECK_THROWS_AS(matmul(Tensor({2, 3}), Tensor({2, 3})),
+                    std::invalid_argument);
+}

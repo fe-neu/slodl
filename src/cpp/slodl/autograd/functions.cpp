@@ -49,6 +49,20 @@ std::vector<std::optional<Tensor>> DivBackward::backward(
     };
 }
 
+MatMulBackward::MatMulBackward(const Tensor& a, const Tensor& b): Node("MatMulBackward"), a(a.detach()), b(b.detach()) {}
+
+std::vector<std::optional<Tensor>> MatMulBackward::backward(
+    std::vector<std::optional<Tensor>> grad_out
+) {
+    // Only one arrangement has shapes that line up: with a [n, k] and b
+    // [k, m], the gradient is [n, m], so the left one must end up [n, k] and
+    // the right one [k, m].
+    return {
+        matmul_kernel(*grad_out[0], b.transpose()),
+        matmul_kernel(a.transpose(), *grad_out[0])
+    };
+}
+
 TransposeBackward::TransposeBackward(std::size_t dim0, std::size_t dim1)
     : Node("TransposeBackward"), dim0(dim0), dim1(dim1) {}
 

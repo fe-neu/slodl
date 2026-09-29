@@ -180,6 +180,24 @@ Tensor mul_kernel(const Tensor& a, const Tensor& b);
 Tensor div_kernel(const Tensor& a, const Tensor& b);
 
 /**
+ * Multiplies two matrices.
+ *
+ * Strictly 2-dimensional: no batching, and no vector special cases. Each
+ * element of the result is the dot product of a row of `a` with a column of
+ * `b`.
+ *
+ * A kernel: it records no autograd history, so the result is a leaf even when
+ * the inputs require gradients. Use the recording `matmul` for that.
+ *
+ * @param a  Left operand, of shape [n, k]; may be a view.
+ * @param b  Right operand, of shape [k, m]; may be a view.
+ * @return A newly allocated, contiguous tensor of shape [n, m].
+ * @throws std::invalid_argument if either operand is not 2-dimensional, or if
+ *         `a`'s columns do not match `b`'s rows.
+ */
+Tensor matmul_kernel(const Tensor& a, const Tensor& b);
+
+/**
  * Sums a tensor back down to a shape it was broadcast from.
  *
  * The reverse of stretching: every element of `a` is added into the element of

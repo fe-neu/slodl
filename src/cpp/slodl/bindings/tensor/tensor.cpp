@@ -106,6 +106,7 @@ void register_tensor(py::module_& m) {
                 return div(other, self); }, py::arg("other"))
         .def("expand", [](const Tensor& self, std::vector<std::size_t> shape) {
                 return expand(self, shape); }, py::arg("shape"))
+        .def("__matmul__", &matmul, py::arg("other"))
         .def("transpose",
              [](const Tensor& self, std::size_t dim0, std::size_t dim1) {
                  return transpose(self, dim0, dim1);

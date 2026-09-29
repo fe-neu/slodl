@@ -129,6 +129,22 @@ Tensor div(const Tensor& a, const Tensor& b);
 Tensor operator/(const Tensor& a, const Tensor& b);
 
 /**
+ * Multiplies two matrices, recording the operation for autograd.
+ *
+ * Strictly 2-dimensional. A batch of inputs through a linear layer is already
+ * this shape: [batch, in] by [in, out].
+ *
+ * @param a  Left operand, of shape [n, k].
+ * @param b  Right operand, of shape [k, m].
+ * @return The product, of shape [n, m]. It requires a gradient, and carries a
+ *         MatMulBackward as its grad_fn, if either input requires a gradient
+ *         and recording is enabled.
+ * @throws std::invalid_argument if either operand is not 2-dimensional, or if
+ *         the shapes do not line up.
+ */
+Tensor matmul(const Tensor& a, const Tensor& b);
+
+/**
  * Swaps two axes of a tensor, recording the operation for autograd.
  *
  * Nothing is copied: the result reads the same storage with those two axes'

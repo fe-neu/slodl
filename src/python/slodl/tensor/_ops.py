@@ -346,3 +346,57 @@ def transpose(a: Tensor, dim0: int = 0, dim1: int = 1) -> Tensor:
             [3, 6]])
     """
     return Tensor._from_impl(_core.transpose(a._impl, int(dim0), int(dim1)))
+
+
+def matmul(a: Tensor, b: Tensor) -> Tensor:
+    """Multiply two matrices.
+
+    This is the matrix product, not the element-wise one: each entry of the
+    result is the dot product of a row of ``a`` with a column of ``b``. For
+    element-wise multiplication use :func:`slodl.mul`.
+
+    Parameters
+    ----------
+    a : Tensor
+        Left operand, of shape ``[n, k]``.
+    b : Tensor
+        Right operand, of shape ``[k, m]``.
+
+    Returns
+    -------
+    Tensor
+        The product, of shape ``[n, m]``. It requires a gradient, and records
+        the operation, if either input does.
+
+    Raises
+    ------
+    ValueError
+        If either operand is not 2-dimensional, or if ``a``'s columns do not
+        match ``b``'s rows.
+
+    See Also
+    --------
+    slodl.Tensor.__matmul__ : The same operation, spelled ``a @ b``.
+
+    Notes
+    -----
+    Strictly 2-dimensional: there is no batching and no vector special case.
+    A batch of inputs through a linear layer already has this shape,
+    ``[batch, in] @ [in, out]``.
+
+    Examples
+    --------
+    >>> from slodl import Tensor, matmul
+    >>> matmul(Tensor([[1, 2], [3, 4]]), Tensor([[5, 6], [7, 8]]))
+    Tensor([[19, 22],
+            [43, 50]])
+
+    The gradients are the product with the other operand transposed:
+
+    >>> a = Tensor([[1.0, 2.0]]).requires_grad_()
+    >>> b = Tensor([[3.0], [4.0]]).requires_grad_()
+    >>> (a @ b).sum().backward()
+    >>> a.grad
+    Tensor([[3, 4]])
+    """
+    return Tensor._from_impl(_core.matmul(a._impl, b._impl))

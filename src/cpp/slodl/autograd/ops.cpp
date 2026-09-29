@@ -141,6 +141,15 @@ Tensor operator/(const Tensor& a, const Tensor& b) {
     return div(a, b);
 }
 
+Tensor matmul(const Tensor& a, const Tensor& b) {
+    Tensor result = matmul_kernel(a, b);
+
+    if (should_record({a, b})) {
+        set_history(result, std::make_shared<MatMulBackward>(a, b), {a, b});
+    }
+    return result;
+}
+
 Tensor transpose(const Tensor& a, std::size_t dim0, std::size_t dim1) {
     Tensor result = a.transpose(dim0, dim1);
 

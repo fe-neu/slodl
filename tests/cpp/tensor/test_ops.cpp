@@ -416,3 +416,76 @@ TEST_CASE("cloning a transposed view compacts it", "[tensor]") {
     CHECK(compact[0][1].item() == 4.0);
     CHECK(compact[2][0].item() == 3.0);
 }
+
+TEST_CASE("matmul_kernel multiplies two matrices", "[tensor]") {
+    Tensor a({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor b({3, 2}, {7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
+
+    Tensor product = matmul_kernel(a, b);
+
+    CHECK(product.shape() == std::vector<std::size_t>{2, 2});
+    CHECK(product[0][0].item() == 58.0);    // 1*7 + 2*9 + 3*11
+    CHECK(product[0][1].item() == 64.0);    // 1*8 + 2*10 + 3*12
+    CHECK(product[1][0].item() == 139.0);   // 4*7 + 5*9 + 6*11
+    CHECK(product[1][1].item() == 154.0);   // 4*8 + 5*10 + 6*12
+}
+
+TEST_CASE("matmul_kernel is not element-wise multiplication", "[tensor]") {
+    Tensor a({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    Tensor b({2, 2}, {5.0, 6.0, 7.0, 8.0});
+
+    Tensor product = matmul_kernel(a, b);
+
+    CHECK(product[0][0].item() == 19.0);    // 1*5 + 2*7, not 1*5
+    CHECK(product[1][1].item() == 50.0);    // 3*6 + 4*8
+}
+
+TEST_CASE("multiplying by the identity gives the original", "[tensor]") {
+    Tensor a({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    Tensor identity({2, 2}, {1.0, 0.0, 0.0, 1.0});
+
+    Tensor product = matmul_kernel(a, identity);
+
+    CHECK(product[0][1].item() == 2.0);
+    CHECK(product[1][0].item() == 3.0);
+}
+
+TEST_CASE("matmul_kernel reads transposed operands correctly", "[tensor]") {
+    Tensor a({3, 2}, {1.0, 4.0, 2.0, 5.0, 3.0, 6.0});   // the [2,3] above, transposed
+    Tensor b({3, 2}, {7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
+
+    Tensor product = matmul_kernel(a.transpose(), b);
+
+    CHECK(product.shape() == std::vector<std::size_t>{2, 2});
+    CHECK(product[0][0].item() == 58.0);
+    CHECK(product[1][1].item() == 154.0);
+}
+
+TEST_CASE("matmul_kernel handles non-square shapes", "[tensor]") {
+    Tensor a({1, 3}, {1.0, 2.0, 3.0});
+    Tensor b({3, 4}, 1.0);
+
+    Tensor product = matmul_kernel(a, b);
+
+    CHECK(product.shape() == std::vector<std::size_t>{1, 4});
+    CHECK(product[0][0].item() == 6.0);
+    CHECK(product[0][3].item() == 6.0);
+}
+
+TEST_CASE("matmul_kernel rejects shapes that do not line up", "[tensor]") {
+    CHECK_THROWS_AS(matmul_kernel(Tensor({2, 3}), Tensor({2, 3})),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(matmul_kernel(Tensor({2, 3}), Tensor({3})),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(matmul_kernel(Tensor({2}), Tensor({2, 2})),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(matmul_kernel(Tensor({2, 2, 2}), Tensor({2, 2})),
+                    std::invalid_argument);
+}
+
+TEST_CASE("matmul_kernel records no autograd history", "[tensor]") {
+    Tensor a({2, 2}, 1.0);
+    a.requires_grad_();
+
+    CHECK_FALSE(matmul_kernel(a, a).requires_grad());
+}
