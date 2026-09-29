@@ -1,0 +1,195 @@
+#ifndef FUNCTIONS_HPP
+#define FUNCTIONS_HPP
+
+#include <optional>
+#include <vector>
+
+#include "slodl/autograd/autograd.hpp"
+#include "slodl/tensor/tensor.hpp"
+
+/**
+ * Backward of addition.
+ *
+ * Adding does not scale its inputs, so both partial derivatives are 1 and the
+ * incoming gradient passes through unchanged to each input. Nothing from the
+ * forward pass is needed, which makes this node stateless.
+ */
+class AddBackward : public Node {
+    public:
+        AddBackward();
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+};
+
+/**
+ * Backward of subtraction.
+ *
+ * Raising the left operand raises the difference by the same amount, while
+ * raising the right operand lowers it, so the partial derivatives are 1 and
+ * -1. The left input therefore receives the incoming gradient unchanged and
+ * the right one receives it negated.
+ *
+ * Nothing from the forward pass is needed, which makes this node stateless.
+ */
+class SubBackward : public Node {
+    public:
+        SubBackward();
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+};
+
+/**
+ * Backward of negation.
+ *
+ * Negating scales its input by -1, so the partial derivative is -1 and the
+ * incoming gradient comes back negated.
+ *
+ * Nothing from the forward pass is needed, which makes this node stateless.
+ */
+class NegBackward : public Node {
+    public:
+        NegBackward();
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+};
+
+/**
+ * Backward of element-wise multiplication.
+ *
+ * Each input is scaled by the other, so the partial derivative with respect to
+ * one input is the other input's value, and each gradient is the incoming
+ * gradient multiplied by the opposite input.
+ *
+ * That makes this node stateful: it has to remember both inputs from the
+ * forward pass. They are stored detached, so the saved values carry no history
+ * of their own and cannot keep the graph that produced them alive.
+ */
+class MulBackward : public Node {
+    public:
+        MulBackward(const Tensor& a, const Tensor& b);
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+
+    private:
+        // By value, not by reference: these are detached copies of the inputs,
+        // and a reference would dangle once the constructor's temporaries die.
+        // Copying a Tensor shares its storage, so this is cheap.
+        Tensor a;
+        Tensor b;
+};
+
+/**
+ * Backward of element-wise division.
+ *
+ * For a / b the two partial derivatives differ in kind. With respect to the
+ * dividend the divisor is only a constant factor, so the derivative is 1/b and
+ * the gradient is the incoming gradient divided by b. With respect to the
+ * divisor, writing the quotient as a * b^-1 gives a derivative of -a / b^2, so
+ * that gradient is negative: raising the divisor lowers the result.
+ *
+ * Both inputs are needed to compute those, so this node saves them, detached
+ * so that the saved values carry no history and cannot keep the graph that
+ * produced them alive.
+ */
+class DivBackward : public Node {
+    public:
+        DivBackward(const Tensor& a, const Tensor& b);
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+
+    private:
+        Tensor a;
+        Tensor b;
+};
+
+/**
+ * Backward of matrix multiplication.
+ *
+ * Each element of the product is a dot product, so a given element of `a`
+ * contributed to a whole row of the result, weighted by a row of `b`.
+ * Collecting those contributions gives grad_a = grad @ b-transposed, and by
+ * the same argument grad_b = a-transposed @ grad. The shapes confirm it: only
+ * that arrangement lines up.
+ *
+ * Both inputs are needed, so this node saves them, detached.
+ */
+class MatMulBackward : public Node {
+    public:
+        MatMulBackward(const Tensor& a, const Tensor& b);
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+
+    private:
+        Tensor a;
+        Tensor b;
+};
+
+/**
+ * Backward of swapping two axes.
+ *
+ * Transposing only changes the order the elements are read in, so the gradient
+ * is routed straight back by undoing that reordering. Swapping the same two
+ * axes again is exactly that: transposing is its own inverse.
+ *
+ * The two axes are all this node needs from the forward pass.
+ */
+class TransposeBackward : public Node {
+    public:
+        TransposeBackward(std::size_t dim0, std::size_t dim1);
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+
+    private:
+        std::size_t dim0;
+        std::size_t dim1;
+};
+
+/**
+ * Backward of summing every element.
+ *
+ * A sum is linear in each element: nudging one element moves the total by the
+ * same amount, so every partial derivative is 1 and each element's gradient is
+ * the incoming gradient itself. Since the sum is a scalar, that gradient is a
+ * single number, copied into every position of a tensor shaped like the input.
+ *
+ * A reduction forward is an expansion backward, which is the mirror of
+ * broadcasting, where a copy forward becomes a sum backward.
+ *
+ * Nothing from the forward pass is needed beyond the input's shape, which
+ * Node already records in input_shapes, so this node is stateless.
+ */
+class SumBackward : public Node {
+    public:
+        SumBackward();
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+};
+
+/**
+ * Backward of stretching a tensor to a larger shape.
+ *
+ * Expanding reads one element in several places, so in reverse every place it
+ * was read from contributes: the gradient is summed back down to the input's
+ * shape. A copy forwards is a sum backwards, the mirror of a reduction, whose
+ * gradient is a copy.
+ *
+ * Only the input's shape is needed, which Node already records in
+ * input_shapes, so this node is stateless.
+ */
+class ExpandBackward : public Node {
+    public:
+        ExpandBackward();
+
+    protected:
+        std::vector<std::optional<Tensor>> backward(std::vector<std::optional<Tensor>> grad_out) override;
+};
+
+#endif

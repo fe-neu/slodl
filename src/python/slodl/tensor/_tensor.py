@@ -19,31 +19,34 @@ class Tensor:
 
     Parameters
     ----------
-    dims : sequence of int or ndarray
-        Size of each dimension. An empty sequence creates a 0-dimensional
-        tensor holding a single value. A NumPy array is instead taken as the
-        tensor's contents, equivalent to :meth:`Tensor.from_numpy`; a list is
-        always read as dimensions.
-    data : float or sequence of float, optional
-        A float fills every element with that value. A sequence is taken as
-        the elements themselves, in row-major order, and must contain exactly
-        ``prod(dims)`` of them. If omitted, the tensor is filled with zeros.
+    data : array_like
+        The tensor's contents. Nested sequences give a tensor of the
+        corresponding shape, a NumPy array gives a tensor of that array's
+        shape, and a bare number gives a 0-dimensional tensor. The elements
+        are copied and converted to ``float64``.
 
     Raises
     ------
-    IndexError
-        If ``data`` is a sequence whose length does not match ``dims``. (The
-        core raises ``std::out_of_range`` here, which pybind11 maps to
-        ``IndexError``; ``ValueError`` would fit better.)
+    ValueError
+        If ``data`` is ragged, such as ``[[1, 2], [3]]``, or holds something
+        that cannot be read as a number.
 
     See Also
     --------
+    slodl.zeros, slodl.ones, slodl.full : Create a tensor from a shape
+        instead of from data.
     Tensor.item : Read the value out of a 0-dimensional tensor.
+
+    Notes
+    -----
+    Like ``numpy.array`` and ``torch.tensor``, this takes the *values* of the
+    tensor, not its dimensions. ``Tensor([2, 3])`` is a 1-dimensional tensor
+    holding 2.0 and 3.0; for a 2x3 tensor of zeros use ``zeros([2, 3])``.
 
     Examples
     --------
     >>> from slodl import Tensor
-    >>> t = Tensor([2, 2], [1, 2, 3, 4])
+    >>> t = Tensor([[1, 2], [3, 4]])
     >>> t
     Tensor([[1, 2],
             [3, 4]])
@@ -59,30 +62,20 @@ class Tensor:
     >>> t[0][1]
     50.0
 
-    A NumPy array can be used directly, and shares no memory with the tensor:
+    A NumPy array or a bare number works too:
 
     >>> import numpy as np
     >>> Tensor(np.eye(2)).shape
     [2, 2]
+    >>> Tensor(5.0).item()
+    5.0
     """
 
-    def __init__(
-        self,
-        dims: Sequence[int] | np.ndarray,
-        data: float | Sequence[float] | None = None,
-    ) -> None:
-        # Composition, not inheritance: _impl is the compiled tensor.
-        if isinstance(dims, np.ndarray):
-            if data is not None:
-                raise TypeError(
-                    "data cannot be given when constructing from an array")
-            self._impl = _core.Tensor.from_numpy(dims)
-        elif data is None:
-            self._impl = _core.Tensor(list(dims))
-        elif isinstance(data, (int, float)):
-            self._impl = _core.Tensor(list(dims), float(data))
+    def __init__(self, data: npt.ArrayLike | Tensor) -> None:
+        if isinstance(data, Tensor):
+            self._impl = data._impl.clone()
         else:
-            self._impl = _core.Tensor(list(dims), [float(x) for x in data])
+            self._impl = _core.Tensor.from_numpy(np.asarray(data, dtype=np.float64))
 
     @classmethod
     def from_numpy(cls, array: npt.ArrayLike) -> Tensor:
@@ -144,7 +137,7 @@ class Tensor:
         --------
         >>> import numpy as np
         >>> from slodl import Tensor
-        >>> t = Tensor([2, 2], [1, 2, 3, 4])
+        >>> t = Tensor([[1, 2], [3, 4]])
         >>> np.asarray(t)
         array([[1., 2.],
                [3., 4.]])
@@ -164,6 +157,29 @@ class Tensor:
             raise ValueError("cannot avoid a copy for this conversion")
         return array
 
+    def clone(self) -> Tensor:
+        """Return a copy with its own storage.
+
+        The copy holds the same values but shares nothing with this tensor,
+        so writing to either leaves the other unchanged. Cloning a view
+        produces a tensor of the view's shape, laid out contiguously.
+
+        Returns
+        -------
+        Tensor
+            An independent tensor with the same shape and values.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> t = Tensor([[1, 2], [3, 4]])
+        >>> copy = t.clone()
+        >>> copy[0][0] = 99.0
+        >>> t[0][0]
+        1.0
+        """
+        return Tensor._from_impl(self._impl.clone())
+
     @classmethod
     def _from_impl(cls, impl: _core.Tensor) -> Tensor:
         """Wrap a compiled tensor without constructing new storage."""
@@ -177,8 +193,8 @@ class Tensor:
 
         Examples
         --------
-        >>> from slodl import Tensor
-        >>> Tensor([2, 3]).shape
+        >>> from slodl import zeros
+        >>> zeros([2, 3]).shape
         [2, 3]
         """
         return self._impl.shape
@@ -203,7 +219,7 @@ class Tensor:
         Examples
         --------
         >>> from slodl import Tensor
-        >>> Tensor([], 5.0).item()
+        >>> Tensor(5.0).item()
         5.0
         """
         return self._impl.item()
@@ -241,7 +257,7 @@ class Tensor:
         Examples
         --------
         >>> from slodl import Tensor
-        >>> t = Tensor([2, 2], [1, 2, 3, 4])
+        >>> t = Tensor([[1, 2], [3, 4]])
         >>> t[0]
         Tensor([1, 2])
         >>> t[0][1]
@@ -263,15 +279,14 @@ class Tensor:
             Position along the outermost dimension. Negative values count
             back from the end.
         value : float or Tensor
-            A float, which requires that ``self[index]`` is a single element.
-            A tensor, whose values are copied into that slice; it must have
-            the same shape as the slice.
+            A float, which is written to every element of the slice. A
+            tensor, whose values are copied into the slice; it must have the
+            same shape as the slice.
 
         Raises
         ------
         IndexError
-            If ``index`` is out of range, or a float is assigned to a slice
-            that is not a single element.
+            If ``index`` is out of range.
         ValueError
             If ``value`` is a tensor whose shape differs from the slice.
 
@@ -283,18 +298,588 @@ class Tensor:
         Examples
         --------
         >>> from slodl import Tensor
-        >>> t = Tensor([2, 2], [1, 2, 3, 4])
+        >>> t = Tensor([[1, 2], [3, 4]])
         >>> t[0][0] = 9.0
         >>> t[0][0]
         9.0
         >>> t[1] = t[0]
         >>> [t[1][j] for j in range(2)]
         [9.0, 2.0]
+
+        A float fills the whole slice:
+
+        >>> t[0] = 7.0
+        >>> [t[0][j] for j in range(2)]
+        [7.0, 7.0]
         """
         if isinstance(value, Tensor):
             self._impl[index] = value._impl
         else:
             self._impl[index] = float(value)
+
+    def __add__(self, other: Tensor) -> Tensor:
+        """Add two tensors element by element.
+
+        Parameters
+        ----------
+        other : Tensor or float
+            A tensor whose shape broadcasts against this one's, or a number,
+            which is added to every element.
+
+        Returns
+        -------
+        Tensor
+            A new tensor holding the sums, recording the addition if either
+            operand requires a gradient.
+
+        Raises
+        ------
+        ValueError
+            If the shapes cannot be broadcast together.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([1, 2]) + Tensor([10, 20])
+        Tensor([11, 22])
+
+        A row is added to every row of a matrix, and a number to every
+        element:
+
+        >>> Tensor([[1, 2], [3, 4]]) + Tensor([10, 20])
+        Tensor([[11, 22],
+                [13, 24]])
+        >>> 100 + Tensor([1, 2])
+        Tensor([101, 102])
+        """
+        if isinstance(other, Tensor):
+            return Tensor._from_impl(self._impl + other._impl)
+        if isinstance(other, (int, float)):
+            return Tensor._from_impl(self._impl + float(other))
+        return NotImplemented
+
+    __radd__ = __add__
+
+    def __mul__(self, other: Tensor) -> Tensor:
+        """Multiply two tensors element by element.
+
+        This is the element-wise (Hadamard) product, not a matrix product.
+
+        Parameters
+        ----------
+        other : Tensor or float
+            A tensor whose shape broadcasts against this one's, or a number,
+            which scales every element.
+
+        Returns
+        -------
+        Tensor
+            A new tensor holding the products, recording the multiplication
+            if either operand requires a gradient.
+
+        Raises
+        ------
+        ValueError
+            If the shapes cannot be broadcast together.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([2, 3]) * Tensor([10, 20])
+        Tensor([20, 60])
+        >>> Tensor([1, 2]) * 3
+        Tensor([3, 6])
+        """
+        if isinstance(other, Tensor):
+            return Tensor._from_impl(self._impl * other._impl)
+        if isinstance(other, (int, float)):
+            return Tensor._from_impl(self._impl * float(other))
+        return NotImplemented
+
+    __rmul__ = __mul__
+
+    def __sub__(self, other: Tensor) -> Tensor:
+        """Subtract another tensor, element by element.
+
+        Parameters
+        ----------
+        other : Tensor or float
+            A tensor whose shape broadcasts against this one's, or a number,
+            which is subtracted from every element.
+
+        Returns
+        -------
+        Tensor
+            A new tensor holding the differences, recording the subtraction
+            if either operand requires a gradient.
+
+        Raises
+        ------
+        ValueError
+            If the shapes cannot be broadcast together.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([10, 3]) - Tensor([4, 8])
+        Tensor([6, -5])
+        >>> 10 - Tensor([1, 2])
+        Tensor([9, 8])
+        """
+        if isinstance(other, Tensor):
+            return Tensor._from_impl(self._impl - other._impl)
+        if isinstance(other, (int, float)):
+            return Tensor._from_impl(self._impl - float(other))
+        return NotImplemented
+
+    def __rsub__(self, other: float) -> Tensor:
+        """Subtract this tensor from a number, element by element."""
+        if not isinstance(other, (int, float)):
+            return NotImplemented
+        return Tensor._from_impl(float(other) - self._impl)
+
+    def __truediv__(self, other: Tensor) -> Tensor:
+        """Divide by another tensor, element by element.
+
+        Parameters
+        ----------
+        other : Tensor or float
+            A tensor whose shape broadcasts against this one's, or a number,
+            which divides every element.
+
+        Returns
+        -------
+        Tensor
+            A new tensor holding the quotients, recording the division if
+            either operand requires a gradient.
+
+        Raises
+        ------
+        ValueError
+            If the shapes cannot be broadcast together.
+
+        Notes
+        -----
+        Dividing by zero follows IEEE 754 and gives an infinity, or a NaN
+        for ``0 / 0``, rather than raising.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([6, 9]) / Tensor([2, 3])
+        Tensor([3, 3])
+        >>> Tensor([6, 9]) / 3
+        Tensor([2, 3])
+        """
+        if isinstance(other, Tensor):
+            return Tensor._from_impl(self._impl / other._impl)
+        if isinstance(other, (int, float)):
+            return Tensor._from_impl(self._impl / float(other))
+        return NotImplemented
+
+    def __rtruediv__(self, other: float) -> Tensor:
+        """Divide a number by this tensor, element by element."""
+        if not isinstance(other, (int, float)):
+            return NotImplemented
+        return Tensor._from_impl(float(other) / self._impl)
+
+    def __neg__(self) -> Tensor:
+        """Flip the sign of every element.
+
+        Returns
+        -------
+        Tensor
+            A new tensor holding the negated elements, recording the
+            negation if this tensor requires a gradient.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> -Tensor([1, -2, 3])
+        Tensor([-1, 2, -3])
+        """
+        return Tensor._from_impl(-self._impl)
+
+    def expand(self, shape: Sequence[int]) -> Tensor:
+        """Read this tensor as though it had a larger shape.
+
+        Dimensions of size 1 are stretched, and dimensions this tensor does
+        not have are added on the left. Nothing is copied: the stretched
+        positions all read the same element.
+
+        Parameters
+        ----------
+        shape : sequence of int
+            The shape to read this tensor as. This tensor's shape must
+            broadcast to it.
+
+        Returns
+        -------
+        Tensor
+            A view sharing this tensor's storage.
+
+        Raises
+        ------
+        ValueError
+            If this tensor's shape does not broadcast to ``shape``.
+
+        Notes
+        -----
+        The operators broadcast on their own, so this is rarely needed
+        directly. In a backward pass the gradient is summed back down to the
+        original shape, because one element was read in several places.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([1, 2, 3]).expand([2, 3])
+        Tensor([[1, 2, 3],
+                [1, 2, 3]])
+        """
+        return Tensor._from_impl(self._impl.expand([int(d) for d in shape]))
+
+    def mean(self) -> Tensor:
+        """Average every element of this tensor.
+
+        Returns
+        -------
+        Tensor
+            A 0-dimensional tensor holding the average, or NaN for an empty
+            tensor, since that divides zero by zero. It requires a gradient,
+            and records the operation, if this tensor does.
+
+        See Also
+        --------
+        slodl.mean : The same operation, spelled ``slodl.mean(a)``.
+        Tensor.sum : The total rather than the average.
+
+        Notes
+        -----
+        A backward pass gives every element a gradient of ``1 / n``, since
+        each one contributes that much to the average.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([[1, 2], [3, 4]]).mean()
+        Tensor(2.5)
+
+        >>> a = Tensor([1.0, 2.0, 3.0, 4.0]).requires_grad_()
+        >>> a.mean().backward()
+        >>> a.grad
+        Tensor([0.25, 0.25, 0.25, 0.25])
+        """
+        return Tensor._from_impl(self._impl.mean())
+
+    def __matmul__(self, other: Tensor) -> Tensor:
+        """Multiply two matrices.
+
+        This is the matrix product, not the element-wise one; ``*`` does
+        element-wise multiplication.
+
+        Parameters
+        ----------
+        other : Tensor
+            Right operand, of shape ``[k, m]`` when this tensor is
+            ``[n, k]``.
+
+        Returns
+        -------
+        Tensor
+            The product, of shape ``[n, m]``, recording the operation if
+            either operand requires a gradient.
+
+        Raises
+        ------
+        ValueError
+            If either operand is not 2-dimensional, or if the shapes do not
+            line up.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([[1, 2], [3, 4]]) @ Tensor([[5, 6], [7, 8]])
+        Tensor([[19, 22],
+                [43, 50]])
+        """
+        if not isinstance(other, Tensor):
+            return NotImplemented
+        return Tensor._from_impl(self._impl @ other._impl)
+
+    def transpose(self, dim0: int = 0, dim1: int = 1) -> Tensor:
+        """Swap two of this tensor's axes.
+
+        Parameters
+        ----------
+        dim0, dim1 : int, default 0 and 1
+            The axes to swap. The defaults flip a matrix.
+
+        Returns
+        -------
+        Tensor
+            A view sharing this tensor's storage with those axes exchanged.
+            It requires a gradient, and records the operation, if this tensor
+            does.
+
+        Raises
+        ------
+        IndexError
+            If either axis is not a dimension of this tensor.
+
+        See Also
+        --------
+        Tensor.T : The matrix case, spelled ``a.T``.
+        Tensor.clone : An independent, compact copy of the result.
+
+        Notes
+        -----
+        Nothing is copied, so writing through the result writes through to
+        this tensor.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([[1, 2, 3], [4, 5, 6]]).transpose()
+        Tensor([[1, 4],
+                [2, 5],
+                [3, 6]])
+
+        Any two axes can be swapped:
+
+        >>> from slodl import zeros
+        >>> zeros([2, 3, 4]).transpose(0, 2).shape
+        [4, 3, 2]
+        """
+        return Tensor._from_impl(self._impl.transpose(int(dim0), int(dim1)))
+
+    @property
+    def T(self) -> Tensor:
+        """Tensor : This tensor with its first two axes swapped.
+
+        Shorthand for :meth:`transpose` with its default axes.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([[1, 2], [3, 4]]).T
+        Tensor([[1, 3],
+                [2, 4]])
+        """
+        return Tensor._from_impl(self._impl.T)
+
+    def sum(self) -> Tensor:
+        """Add up every element of this tensor.
+
+        This is how a tensor becomes the single value that :meth:`backward`
+        can start from.
+
+        Returns
+        -------
+        Tensor
+            A 0-dimensional tensor holding the total, zero for an empty
+            tensor. It requires a gradient, and records the sum, if this
+            tensor does.
+
+        See Also
+        --------
+        slodl.sum : The same operation, spelled ``slodl.sum(a)``.
+
+        Notes
+        -----
+        Every element contributes to the total equally, so a backward pass
+        gives each one the same gradient. Python's built-in ``sum`` does not
+        work on a tensor; use this instead.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([[1, 2], [3, 4]]).sum()
+        Tensor(10)
+
+        Each element's gradient is the gradient of the total:
+
+        >>> a = Tensor([1.0, 2.0, 3.0]).requires_grad_()
+        >>> a.sum().backward()
+        >>> a.grad
+        Tensor([1, 1, 1])
+        """
+        return Tensor._from_impl(self._impl.sum())
+
+    @property
+    def requires_grad(self) -> bool:
+        """bool : Whether operations on this tensor are recorded for autograd.
+
+        Setting it is only allowed on a leaf: a tensor produced by a recorded
+        operation already inherits its answer from that operation's inputs.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> t = Tensor([1.0, 2.0])
+        >>> t.requires_grad
+        False
+        >>> t.requires_grad = True
+        >>> t.requires_grad
+        True
+        """
+        return self._impl.requires_grad
+
+    @requires_grad.setter
+    def requires_grad(self, flag: bool) -> None:
+        self._impl.requires_grad = bool(flag)
+
+    def requires_grad_(self, flag: bool = True) -> Tensor:
+        """Turn gradient tracking on or off, in place.
+
+        Parameters
+        ----------
+        flag : bool, default True
+            Whether to track gradients.
+
+        Returns
+        -------
+        Tensor
+            This tensor, so the call can be chained.
+
+        Raises
+        ------
+        ValueError
+            If this tensor is not a leaf.
+
+        See Also
+        --------
+        Tensor.requires_grad : The same setting, as a property.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> t = Tensor([1.0, 2.0]).requires_grad_()
+        >>> t.requires_grad
+        True
+        """
+        self._impl.requires_grad_(bool(flag))
+        return self
+
+    @property
+    def is_leaf(self) -> bool:
+        """bool : Whether this tensor was not produced by a recorded operation.
+
+        Tensors you create are leaves, and only leaves accumulate a
+        :attr:`grad`. Results of recorded operations are not.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> a = Tensor([1.0, 2.0]).requires_grad_()
+        >>> a.is_leaf
+        True
+        >>> (a + a).is_leaf
+        False
+        """
+        return self._impl.is_leaf
+
+    @property
+    def grad(self) -> Tensor | None:
+        """Tensor or None : The gradient accumulated by ``backward()``.
+
+        None until a backward pass has accumulated one. Only leaves that
+        require a gradient ever get one.
+
+        Notes
+        -----
+        The returned tensor shares the gradient's storage, so writing to it
+        writes through to the gradient.
+        """
+        gradient = self._impl.grad
+        if gradient is None:
+            return None
+        return Tensor._from_impl(gradient)
+
+    @property
+    def grad_fn(self) -> _core.Node | None:
+        """Node or None : The operation that produced this tensor.
+
+        None for a leaf. Otherwise the node that a backward pass would call
+        to push gradients back to this operation's inputs; it prints as its
+        own name, such as ``<AddBackward>``.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> a = Tensor([1.0, 2.0]).requires_grad_()
+        >>> (a + a).grad_fn
+        <AddBackward>
+        >>> a.grad_fn is None
+        True
+        """
+        return self._impl.grad_fn
+
+    def detach(self) -> Tensor:
+        """Return this tensor's data without its autograd history.
+
+        Returns
+        -------
+        Tensor
+            A tensor sharing this one's storage that requires no gradient and
+            records no history, so gradients do not flow through it. Writes
+            through either tensor are visible in the other.
+
+        See Also
+        --------
+        Tensor.clone : An independent copy, which does not share storage.
+        slodl.no_grad : Stop recording for a whole block instead.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> a = Tensor([1.0, 2.0]).requires_grad_()
+        >>> b = a.detach()
+        >>> b.requires_grad
+        False
+        >>> b[0] = 9.0
+        >>> a[0]
+        9.0
+        """
+        return Tensor._from_impl(self._impl.detach())
+
+    def backward(self) -> None:
+        """Compute gradients back through the graph that produced this tensor.
+
+        Starts from a gradient of 1 for this tensor and works backwards,
+        adding into the :attr:`grad` of every leaf that requires one.
+
+        Raises
+        ------
+        ValueError
+            If this tensor has any dimensions, since a starting gradient is
+            only obvious for a scalar, or if it does not require a gradient.
+
+        See Also
+        --------
+        Tensor.grad : Where the results end up.
+
+        Notes
+        -----
+        Gradients accumulate, so calling this twice without clearing
+        :attr:`grad` in between adds to what is already there.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> a = Tensor(2.0).requires_grad_()
+        >>> b = Tensor(3.0).requires_grad_()
+        >>> (a + b).backward()
+        >>> a.grad
+        Tensor(1)
+
+        A tensor used twice collects a gradient from each use:
+
+        >>> c = Tensor(1.0).requires_grad_()
+        >>> (c + c).backward()
+        >>> c.grad
+        Tensor(2)
+        """
+        self._impl.backward()
 
     def __repr__(self) -> str:
         return repr(self._impl)

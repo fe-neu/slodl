@@ -19,11 +19,18 @@ speed.
 - **Scalars where you expect them** — indexing every dimension gives a plain
   Python `float`, the way NumPy behaves, even though the C++ side has to model
   it as a 0-dimensional tensor.
-- **Assignment copies values** — `a[0] = b` writes `b`'s elements into `a`'s
-  existing storage rather than quietly rebinding a temporary, which would look
-  identical and do nothing.
+- **Arithmetic with autograd** — `+ - * / @`, `sum`, `mean`, `transpose`, and
+  `neg`, each recording what it did so `backward()` can walk back through it.
+- **Broadcasting** — shapes are stretched NumPy-style, so a bias row adds to a
+  whole batch and plain numbers work as operands. Stretching is a view with a
+  stride of 0, and its gradient is summed back down.
+- **Writes are explicit** — assignment makes two names for one tensor, while
+  `copy_` and `fill_` write into existing storage. In Python, `a[0] = b` writes
+  values, as it does in NumPy.
 - **NumPy interoperability** — build a tensor from any array, and hand a tensor
   to `np.asarray` without copying, so the two share memory.
+- **Creation that reads like NumPy** — `Tensor([[1, 2], [3, 4]])` takes nested
+  data, while `zeros`, `ones` and `full` build from a shape.
 - **Readable `repr`** — prints the actual values, nested and aligned like
   NumPy, and summarises anything over 1000 elements.
 - **Typed** — ships `py.typed` and stubs.
@@ -44,7 +51,7 @@ Ninja into an isolated build environment automatically.
 import numpy as np
 from slodl import Tensor
 
-t = Tensor([2, 2], [1, 2, 3, 4])
+t = Tensor([[1, 2], [3, 4]])
 t
 # Tensor([[1, 2],
 #         [3, 4]])
@@ -54,12 +61,17 @@ t[1][0]        # 3.0  — a float, not a tensor
 len(t)         # 2
 ```
 
-Other ways to build one:
+As in NumPy and PyTorch, the argument is the *data*, not the dimensions — so
+`Tensor([2, 3])` is a 1-dimensional tensor holding 2.0 and 3.0. Creating by
+shape has its own functions:
 
 ```python
-Tensor([2, 3])            # zero-filled
-Tensor([2, 2], 7.0)       # filled with a value
-Tensor([], 5.0)           # 0-dimensional; read it with .item()
+from slodl import zeros, ones, full
+
+zeros([2, 3])             # 2x3, all 0.0
+ones([2, 2])              # 2x2, all 1.0
+full([2, 2], 7.0)         # 2x2, all 7.0
+Tensor(5.0)               # 0-dimensional; read it with .item()
 ```
 
 Indexing gives a view, so writing through it changes the original:
@@ -70,10 +82,60 @@ row[1] = 50.0
 t[0][1]        # 50.0
 ```
 
-Assigning a tensor copies its values into the destination:
+Assigning a tensor copies its values into the destination, and `clone` gives an
+independent tensor when you want one:
 
 ```python
-t[1] = t[0]    # row 1 now holds row 0's values
+t[1] = t[0]        # row 1 now holds row 0's values
+copy = t.clone()   # shares nothing with t
+```
+
+### Autograd
+
+Mark the tensors you want gradients for, compute a scalar, and call
+`backward()`:
+
+```python
+from slodl import Tensor
+
+a = Tensor([2.0, 3.0]).requires_grad_()
+b = Tensor([10.0, 20.0]).requires_grad_()
+
+(a * b).sum().backward()
+a.grad        # Tensor([10, 20])
+b.grad        # Tensor([2, 3])
+```
+
+`backward()` needs a 0-dimensional tensor, which is what `sum` and `mean` are
+for. Gradients accumulate, so a second pass adds to the first.
+
+Matrix multiplication is `@`, and a row broadcasts across a batch, so a linear
+layer is one line:
+
+```python
+import slodl
+
+inputs = Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])   # batch of 2
+weights = slodl.full([3, 2], 0.5).requires_grad_()
+bias = slodl.full([2], 0.1).requires_grad_()
+
+outputs = inputs @ weights + bias
+outputs.mean().backward()
+
+weights.grad.shape   # [3, 2]
+bias.grad.shape      # [2]
+```
+
+Recording can be turned off, and a single tensor can be cut loose from its
+history:
+
+```python
+from slodl import no_grad
+
+with no_grad():
+    prediction = inputs @ weights + bias   # computes, records nothing
+
+weights.detach()      # same storage, no history
 ```
 
 NumPy goes in and out. Building from an array copies; `np.asarray` shares
@@ -127,11 +189,10 @@ things must hold, or every import after the first fails:
    `"env": {"PATH": "/abs/path/to/.venv/bin:${PATH}"}` to its `kernel.json`
    instead.
 
-One way into that broken state is to run an isolated build — `pip install .` or
-`pip wheel .` — in a checkout that also has an editable install. Both share the
-`build/` tree, and the isolated build rewrites it with paths into a temporary
-environment that is deleted afterwards, so the next `import slodl` fails with
-`cmake: not found`.
+A third way in is to run an isolated build — `pip install .` or `pip wheel .` —
+in a checkout that also has an editable install. Both share the `build/` tree,
+and the isolated build rewrites it with paths into a temporary environment that
+is deleted afterwards, so the next `import slodl` fails the same way.
 
 If an editable checkout gets into a broken state, `rm -rf build` and re-run the
 `pip install --no-build-isolation -e .` step.
@@ -202,7 +263,8 @@ bindings, Python wrapper, and tests mirroring that layout.
 
 ## Status
 
-Early and incomplete. `Tensor` exists with views, NumPy interoperability, and
-element access; there is no arithmetic, no slicing, no `reshape`/`transpose`,
-and nothing built on top of tensors yet. See [CHANGELOG.md](CHANGELOG.md) for
-what has landed and the current known limitations.
+Early and incomplete, but a linear model trains end to end: element-wise
+arithmetic, `matmul`, reductions, broadcasting and reverse-mode autograd all
+work. Still missing are activations, dimension-wise reductions, `reshape` and
+slicing, and anything above tensors — no `zero_grad`, optimizers or layers yet.
+See [CHANGELOG.md](CHANGELOG.md) for what has landed and the known limitations.

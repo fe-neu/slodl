@@ -60,7 +60,7 @@ TEST_CASE("operator[] returns a view onto the same storage", "[tensor]") {
     CHECK(row.shape() == std::vector<std::size_t>{2});
     CHECK(row.data() == t.data() + 2);  // points into the parent's buffer
 
-    row[0] = 30.0;
+    row[0].fill_(30.0);
 
     CHECK(t[1][0].item() == 30.0);  // the write is visible from the parent
 }
@@ -101,43 +101,72 @@ TEST_CASE("item() requires a 0-dimensional tensor", "[tensor]") {
     CHECK_THROWS_AS(t[0].item(), std::out_of_range);
 }
 
-TEST_CASE("assigning a double writes through to the storage", "[tensor]") {
+TEST_CASE("fill_ writes through to the storage", "[tensor]") {
     Tensor t({2, 2});
 
-    t[0][1] = 9.0;
+    t[0][1].fill_(9.0);
 
     CHECK(t[0][1].item() == 9.0);
     CHECK(t[0][0].item() == 0.0);  // neighbouring elements untouched
 }
 
-TEST_CASE("a double cannot be assigned to a non-scalar tensor", "[tensor]") {
+TEST_CASE("fill_ writes every element of a view", "[tensor]") {
     Tensor t({2, 2});
 
-    CHECK_THROWS_AS(t[0] = 1.0, std::out_of_range);
+    t[1].fill_(5.0);
+
+    CHECK(t[1][0].item() == 5.0);
+    CHECK(t[1][1].item() == 5.0);
+    CHECK(t[0][0].item() == 0.0);
 }
 
-TEST_CASE("assigning a tensor copies values rather than rebinding", "[tensor]") {
+TEST_CASE("assigning a tensor aliases it rather than copying values",
+          "[tensor]") {
     Tensor destination({2}, {1.0, 2.0});
     Tensor source({2}, {8.0, 9.0});
 
     destination = source;
-    source[0] = 100.0;  // the two must not share storage afterwards
+    source[0].fill_(100.0);  // the two share storage afterwards
 
+    CHECK(destination.data() == source.data());
+    CHECK(destination[0].item() == 100.0);
+}
+
+TEST_CASE("assignment carries the autograd state along", "[tensor]") {
+    Tensor destination({2});
+    Tensor source({3});
+    source.requires_grad_();
+
+    destination = source;
+
+    CHECK(destination.shape() == std::vector<std::size_t>{3});
+    CHECK(destination.requires_grad());
+    CHECK(destination.autograd_meta() == source.autograd_meta());
+}
+
+TEST_CASE("copy_ copies values into the existing elements", "[tensor]") {
+    Tensor destination({2}, {1.0, 2.0});
+    Tensor source({2}, {8.0, 9.0});
+
+    destination.copy_(source);
+    source[0].fill_(100.0);  // the two must not share storage afterwards
+
+    CHECK(destination.data() != source.data());
     CHECK(destination[0].item() == 8.0);
     CHECK(destination[1].item() == 9.0);
 }
 
-TEST_CASE("assigning a tensor requires a matching shape", "[tensor]") {
+TEST_CASE("copy_ requires a matching shape", "[tensor]") {
     Tensor t({2, 2});
 
-    CHECK_THROWS_AS(t[0] = t, std::invalid_argument);
-    CHECK_THROWS_AS(t = Tensor({3, 3}), std::invalid_argument);
+    CHECK_THROWS_AS(t[0].copy_(t), std::invalid_argument);
+    CHECK_THROWS_AS(t.copy_(Tensor({3, 3})), std::invalid_argument);
 }
 
-TEST_CASE("copying between views of one storage handles overlap", "[tensor]") {
+TEST_CASE("copy_ between views of one storage handles overlap", "[tensor]") {
     Tensor t({2, 2}, {1.0, 2.0, 3.0, 4.0});
 
-    t[1] = t[0];
+    t[1].copy_(t[0]);
 
     CHECK(t[1][0].item() == 1.0);
     CHECK(t[1][1].item() == 2.0);
@@ -145,10 +174,10 @@ TEST_CASE("copying between views of one storage handles overlap", "[tensor]") {
     CHECK(t[0][1].item() == 2.0);
 }
 
-TEST_CASE("self-assignment leaves a tensor unchanged", "[tensor]") {
+TEST_CASE("copy_ from itself leaves a tensor unchanged", "[tensor]") {
     Tensor t({2}, {1.0, 2.0});
 
-    t = t;
+    t.copy_(t);
 
     CHECK(t[0].item() == 1.0);
     CHECK(t[1].item() == 2.0);
@@ -158,7 +187,7 @@ TEST_CASE("the copy constructor shares storage", "[tensor]") {
     Tensor t({2}, {1.0, 2.0});
     Tensor copy(t);
 
-    copy[0] = 50.0;
+    copy[0].fill_(50.0);
 
     CHECK(t[0].item() == 50.0);
 }
@@ -166,6 +195,27 @@ TEST_CASE("the copy constructor shares storage", "[tensor]") {
 TEST_CASE("a view keeps its storage alive after the parent is gone", "[tensor]") {
     Tensor row = Tensor({2, 2}, {1.0, 2.0, 3.0, 4.0})[1];
 
+    CHECK(row[0].item() == 3.0);
+    CHECK(row[1].item() == 4.0);
+}
+
+TEST_CASE("clone copies into fresh storage", "[tensor]") {
+    Tensor t({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    Tensor copy = t.clone();
+
+    copy[0][0].fill_(99.0);
+
+    CHECK(t[0][0].item() == 1.0);
+    CHECK(copy[0][1].item() == 2.0);
+    CHECK(copy.data() != t.data());
+}
+
+TEST_CASE("cloning a view gives a compact tensor of the view's shape", "[tensor]") {
+    Tensor t({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    Tensor row = t[1].clone();
+
+    CHECK(row.shape() == std::vector<std::size_t>{2});
+    CHECK(row.element_strides() == std::vector<std::size_t>{1});
     CHECK(row[0].item() == 3.0);
     CHECK(row[1].item() == 4.0);
 }
@@ -183,4 +233,50 @@ TEST_CASE("repr summarises a large tensor and names its shape", "[tensor]") {
 
     CHECK(repr.find("...") != std::string::npos);
     CHECK(repr.find("shape=[2000]") != std::string::npos);
+}
+
+TEST_CASE("a fresh tensor requires no gradient and is a leaf", "[tensor]") {
+    Tensor t({2, 3});
+
+    CHECK_FALSE(t.requires_grad());
+    CHECK(t.is_leaf());
+    CHECK(t.grad() == nullptr);
+}
+
+TEST_CASE("requires_grad_ toggles the flag and returns the tensor", "[tensor]") {
+    Tensor t({2});
+
+    CHECK(t.requires_grad_().requires_grad());
+    CHECK(t.is_leaf());
+
+    CHECK_FALSE(t.requires_grad_(false).requires_grad());
+}
+
+TEST_CASE("copies of a tensor share one autograd state", "[tensor]") {
+    Tensor t({2});
+    Tensor copy = t;
+
+    t.requires_grad_();
+    CHECK(copy.requires_grad());
+
+    copy.requires_grad_(false);
+    CHECK_FALSE(t.requires_grad());
+
+    CHECK(t.autograd_meta() == copy.autograd_meta());
+}
+
+TEST_CASE("detach shares the data but carries no autograd state", "[tensor]") {
+    Tensor t({2}, {1.0, 2.0});
+    t.requires_grad_();
+
+    Tensor detached = t.detach();
+
+    CHECK_FALSE(detached.requires_grad());
+    CHECK(detached.is_leaf());
+    CHECK(detached.autograd_meta() != t.autograd_meta());
+
+    CHECK(detached.shape() == t.shape());
+    CHECK(detached.data() == t.data());
+    detached[0].fill_(9.0);
+    CHECK(t[0].item() == 9.0);
 }

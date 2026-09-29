@@ -1,0 +1,491 @@
+#include <catch2/catch_test_macros.hpp>
+
+#include <cmath>
+#include <stdexcept>
+#include <vector>
+
+#include "slodl/tensor/ops.hpp"
+#include "slodl/tensor/tensor.hpp"
+
+TEST_CASE("element_count multiplies the dimensions", "[tensor]") {
+    CHECK(element_count({2, 3, 4}) == 24);
+    CHECK(element_count({5}) == 5);
+    CHECK(element_count({}) == 1);
+    CHECK(element_count({3, 0}) == 0);
+}
+
+TEST_CASE("format_shape prints the dimensions", "[tensor]") {
+    CHECK(format_shape({2, 3}) == "[2, 3]");
+    CHECK(format_shape({}) == "[]");
+}
+
+TEST_CASE("add_kernel adds element by element", "[tensor]") {
+    Tensor a({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    Tensor b({2, 2}, {10.0, 20.0, 30.0, 40.0});
+
+    Tensor sum = add_kernel(a, b);
+
+    CHECK(sum.shape() == std::vector<std::size_t>{2, 2});
+    CHECK(sum[0][0].item() == 11.0);
+    CHECK(sum[0][1].item() == 22.0);
+    CHECK(sum[1][0].item() == 33.0);
+    CHECK(sum[1][1].item() == 44.0);
+}
+
+TEST_CASE("add_kernel returns a fresh contiguous tensor", "[tensor]") {
+    Tensor a({2, 2}, 1.0);
+    Tensor b({2, 2}, 2.0);
+
+    Tensor sum = add_kernel(a, b);
+
+    CHECK(sum.element_strides() == std::vector<std::size_t>{2, 1});
+    CHECK(sum.data() != a.data());
+    CHECK(sum.data() != b.data());
+
+    a[0][0].fill_(100.0);
+    CHECK(sum[0][0].item() == 3.0);
+}
+
+TEST_CASE("add_kernel walks views by their strides", "[tensor]") {
+    Tensor matrix({3, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor sum = add_kernel(matrix[1], matrix[2]);
+
+    CHECK(sum.shape() == std::vector<std::size_t>{2});
+    CHECK(sum[0].item() == 8.0);
+    CHECK(sum[1].item() == 10.0);
+}
+
+TEST_CASE("add_kernel adds a view to a contiguous tensor", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor row({3}, {10.0, 20.0, 30.0});
+
+    Tensor sum = add_kernel(matrix[1], row);
+
+    CHECK(sum[0].item() == 14.0);
+    CHECK(sum[1].item() == 25.0);
+    CHECK(sum[2].item() == 36.0);
+}
+
+TEST_CASE("add_kernel handles 0-dimensional tensors", "[tensor]") {
+    Tensor sum = add_kernel(Tensor({}, 2.0), Tensor({}, 5.0));
+
+    CHECK(sum.shape().empty());
+    CHECK(sum.item() == 7.0);
+}
+
+TEST_CASE("add_kernel handles an empty tensor", "[tensor]") {
+    Tensor sum = add_kernel(Tensor({0}), Tensor({0}));
+
+    CHECK(sum.shape() == std::vector<std::size_t>{0});
+}
+
+TEST_CASE("add_kernel walks every element of a 3-dimensional tensor",
+          "[tensor]") {
+    Tensor a({2, 3, 2}, 1.0);
+    Tensor b({2, 3, 2}, 2.0);
+
+    Tensor sum = add_kernel(a, b);
+
+    for (std::size_t i = 0; i < 2; i++) {
+        for (std::size_t j = 0; j < 3; j++) {
+            for (std::size_t k = 0; k < 2; k++) {
+                CHECK(sum[i][j][k].item() == 3.0);
+            }
+        }
+    }
+}
+
+TEST_CASE("add_kernel rejects mismatched shapes", "[tensor]") {
+    CHECK_THROWS_AS(add_kernel(Tensor({2, 2}), Tensor({2, 3})),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(add_kernel(Tensor({2}), Tensor({})),
+                    std::invalid_argument);
+}
+
+TEST_CASE("add_kernel records no autograd history", "[tensor]") {
+    Tensor a({2}, 1.0);
+    Tensor b({2}, 2.0);
+    a.requires_grad_();
+    b.requires_grad_();
+
+    Tensor sum = add_kernel(a, b);
+
+    CHECK_FALSE(sum.requires_grad());
+    CHECK(sum.is_leaf());
+}
+
+TEST_CASE("elementwise runs any operation", "[tensor]") {
+    Tensor a({3}, {1.0, 2.0, 3.0});
+    Tensor b({3}, {10.0, 20.0, 30.0});
+
+    Tensor product = elementwise(a, b, [](double left, double right) {
+        return left * right;
+    });
+    Tensor difference = elementwise(b, a, [](double left, double right) {
+        return left - right;
+    });
+
+    CHECK(product[2].item() == 90.0);
+    CHECK(difference[2].item() == 27.0);
+}
+
+TEST_CASE("reduce_all folds every element", "[tensor]") {
+    Tensor t({2, 2}, {1.0, 2.0, 3.0, 4.0});
+
+    CHECK(reduce_all(t, 0.0, [](double acc, double x) { return acc + x; }) == 10.0);
+    CHECK(reduce_all(t, 1.0, [](double acc, double x) { return acc * x; }) == 24.0);
+}
+
+TEST_CASE("reduce_all walks a view by its strides", "[tensor]") {
+    Tensor t({3, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    CHECK(reduce_all(t[1], 0.0, [](double acc, double x) { return acc + x; }) == 7.0);
+}
+
+TEST_CASE("reduce_all returns the initial value for an empty tensor",
+          "[tensor]") {
+    CHECK(reduce_all(Tensor({0}), 5.0, [](double acc, double x) {
+        return acc + x;
+    }) == 5.0);
+}
+
+TEST_CASE("sum_kernel adds up every element", "[tensor]") {
+    Tensor total = sum_kernel(Tensor({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0}));
+
+    CHECK(total.shape().empty());
+    CHECK(total.item() == 21.0);
+}
+
+TEST_CASE("sum_kernel handles views, scalars and empty tensors", "[tensor]") {
+    Tensor matrix({2, 2}, {1.0, 2.0, 3.0, 4.0});
+
+    CHECK(sum_kernel(matrix[1]).item() == 7.0);
+    CHECK(sum_kernel(Tensor({}, 5.0)).item() == 5.0);
+    CHECK(sum_kernel(Tensor({0})).item() == 0.0);
+}
+
+TEST_CASE("sum_kernel records no autograd history", "[tensor]") {
+    Tensor t({2}, 1.0);
+    t.requires_grad_();
+
+    CHECK_FALSE(sum_kernel(t).requires_grad());
+}
+
+TEST_CASE("unary_elementwise transforms every element", "[tensor]") {
+    Tensor doubled = unary_elementwise(Tensor({2, 2}, {1.0, 2.0, 3.0, 4.0}),
+                                       [](double x) { return x * 2.0; });
+
+    CHECK(doubled.shape() == std::vector<std::size_t>{2, 2});
+    CHECK(doubled[0][0].item() == 2.0);
+    CHECK(doubled[1][1].item() == 8.0);
+}
+
+TEST_CASE("unary_elementwise walks a view by its strides", "[tensor]") {
+    Tensor matrix({3, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor result = unary_elementwise(matrix[2], [](double x) { return x; });
+
+    CHECK(result.shape() == std::vector<std::size_t>{2});
+    CHECK(result[0].item() == 5.0);
+    CHECK(result[1].item() == 6.0);
+}
+
+TEST_CASE("sub_kernel subtracts element by element", "[tensor]") {
+    Tensor difference = sub_kernel(Tensor({2}, {10.0, 3.0}),
+                                   Tensor({2}, {4.0, 8.0}));
+
+    CHECK(difference[0].item() == 6.0);
+    CHECK(difference[1].item() == -5.0);
+}
+
+TEST_CASE("sub_kernel rejects mismatched shapes", "[tensor]") {
+    CHECK_THROWS_AS(sub_kernel(Tensor({2}), Tensor({3})),
+                    std::invalid_argument);
+}
+
+TEST_CASE("neg_kernel flips every sign", "[tensor]") {
+    Tensor negated = neg_kernel(Tensor({3}, {1.0, -2.0, 0.0}));
+
+    CHECK(negated[0].item() == -1.0);
+    CHECK(negated[1].item() == 2.0);
+    CHECK(negated[2].item() == 0.0);
+}
+
+TEST_CASE("neg_kernel handles views, scalars and empty tensors", "[tensor]") {
+    Tensor matrix({2, 2}, {1.0, 2.0, 3.0, 4.0});
+
+    CHECK(neg_kernel(matrix[1])[0].item() == -3.0);
+    CHECK(neg_kernel(Tensor({}, 5.0)).item() == -5.0);
+    CHECK(neg_kernel(Tensor({0})).shape() == std::vector<std::size_t>{0});
+}
+
+TEST_CASE("the unary kernels record no autograd history", "[tensor]") {
+    Tensor t({2}, 1.0);
+    t.requires_grad_();
+
+    CHECK_FALSE(neg_kernel(t).requires_grad());
+    CHECK_FALSE(sub_kernel(t, t).requires_grad());
+}
+
+TEST_CASE("div_kernel divides element by element", "[tensor]") {
+    Tensor quotient = div_kernel(Tensor({2}, {6.0, 9.0}),
+                                 Tensor({2}, {2.0, 3.0}));
+
+    CHECK(quotient[0].item() == 3.0);
+    CHECK(quotient[1].item() == 3.0);
+}
+
+TEST_CASE("div_kernel follows IEEE rules for division by zero", "[tensor]") {
+    Tensor quotient = div_kernel(Tensor({2}, {1.0, 0.0}), Tensor({2}, 0.0));
+
+    CHECK(std::isinf(quotient[0].item()));
+    CHECK(std::isnan(quotient[1].item()));
+}
+
+TEST_CASE("div_kernel rejects mismatched shapes", "[tensor]") {
+    CHECK_THROWS_AS(div_kernel(Tensor({2}), Tensor({3})),
+                    std::invalid_argument);
+}
+
+TEST_CASE("expand stretches without copying", "[tensor]") {
+    Tensor row({3}, {1.0, 2.0, 3.0});
+
+    Tensor wide = row.expand({2, 3});
+
+    CHECK(wide.shape() == std::vector<std::size_t>{2, 3});
+    CHECK(wide.element_strides() == std::vector<std::size_t>{0, 1});
+    CHECK(wide.data() == row.data());
+    CHECK(wide[0][2].item() == 3.0);
+    CHECK(wide[1][2].item() == 3.0);
+}
+
+TEST_CASE("expand stretches a dimension of one", "[tensor]") {
+    Tensor column({2, 1}, {10.0, 20.0});
+
+    Tensor wide = column.expand({2, 3});
+
+    CHECK(wide[0][0].item() == 10.0);
+    CHECK(wide[0][2].item() == 10.0);
+    CHECK(wide[1][1].item() == 20.0);
+}
+
+TEST_CASE("expand of a scalar fills every position", "[tensor]") {
+    Tensor wide = Tensor({}, 7.0).expand({2, 2});
+
+    CHECK(wide[0][0].item() == 7.0);
+    CHECK(wide[1][1].item() == 7.0);
+}
+
+TEST_CASE("a stretched view writes through to its source", "[tensor]") {
+    Tensor row({3}, {1.0, 2.0, 3.0});
+    Tensor wide = row.expand({2, 3});
+
+    row[0].fill_(99.0);
+
+    CHECK(wide[0][0].item() == 99.0);
+    CHECK(wide[1][0].item() == 99.0);
+}
+
+TEST_CASE("kernels read stretched views correctly", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor row({3}, {10.0, 20.0, 30.0});
+
+    Tensor sum = add_kernel(matrix, row.expand({2, 3}));
+
+    CHECK(sum[0][0].item() == 11.0);
+    CHECK(sum[1][2].item() == 36.0);
+    CHECK(sum_kernel(row.expand({2, 3})).item() == 120.0);
+}
+
+TEST_CASE("sum_to_size sums away a stretched axis", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor reduced = sum_to_size(matrix, {3});
+
+    CHECK(reduced.shape() == std::vector<std::size_t>{3});
+    CHECK(reduced[0].item() == 5.0);
+    CHECK(reduced[1].item() == 7.0);
+    CHECK(reduced[2].item() == 9.0);
+}
+
+TEST_CASE("sum_to_size keeps a dimension of one", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor reduced = sum_to_size(matrix, {2, 1});
+
+    CHECK(reduced.shape() == std::vector<std::size_t>{2, 1});
+    CHECK(reduced[0][0].item() == 6.0);
+    CHECK(reduced[1][0].item() == 15.0);
+}
+
+TEST_CASE("sum_to_size down to a scalar totals everything", "[tensor]") {
+    CHECK(sum_to_size(Tensor({2, 2}, {1.0, 2.0, 3.0, 4.0}), {}).item() == 10.0);
+}
+
+TEST_CASE("sum_to_size copies when the shape already matches", "[tensor]") {
+    Tensor t({2}, {1.0, 2.0});
+
+    Tensor same = sum_to_size(t, {2});
+
+    CHECK(same[0].item() == 1.0);
+    CHECK(same.data() != t.data());
+}
+
+TEST_CASE("sum_to_size undoes an expand", "[tensor]") {
+    Tensor row({3}, {1.0, 2.0, 3.0});
+
+    // Stretching to [4, 3] reads each element four times, so summing back
+    // multiplies by four.
+    Tensor reduced = sum_to_size(row.expand({4, 3}), {3});
+
+    CHECK(reduced[0].item() == 4.0);
+    CHECK(reduced[2].item() == 12.0);
+}
+
+TEST_CASE("sum_to_size rejects a shape it cannot have come from", "[tensor]") {
+    CHECK_THROWS_AS(sum_to_size(Tensor({2, 3}), {2}), std::invalid_argument);
+}
+
+TEST_CASE("transpose swaps axes without copying", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor flipped = matrix.transpose();
+
+    CHECK(flipped.shape() == std::vector<std::size_t>{3, 2});
+    CHECK(flipped.element_strides() == std::vector<std::size_t>{1, 3});
+    CHECK(flipped.data() == matrix.data());
+
+    CHECK(flipped[0][0].item() == 1.0);
+    CHECK(flipped[0][1].item() == 4.0);
+    CHECK(flipped[2][1].item() == 6.0);
+}
+
+TEST_CASE("transpose writes through to its source", "[tensor]") {
+    Tensor matrix({2, 2}, {1.0, 2.0, 3.0, 4.0});
+
+    matrix.transpose()[0][1].fill_(99.0);
+
+    CHECK(matrix[1][0].item() == 99.0);
+}
+
+TEST_CASE("transposing twice gives back the original layout", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor twice = matrix.transpose().transpose();
+
+    CHECK(twice.shape() == matrix.shape());
+    CHECK(twice.element_strides() == matrix.element_strides());
+}
+
+TEST_CASE("transpose picks out any two axes", "[tensor]") {
+    Tensor cube({2, 3, 4});
+
+    CHECK(cube.transpose(0, 2).shape() == std::vector<std::size_t>{4, 3, 2});
+    CHECK(cube.transpose(1, 2).shape() == std::vector<std::size_t>{2, 4, 3});
+    CHECK(cube.transpose(1, 1).shape() == std::vector<std::size_t>{2, 3, 4});
+}
+
+TEST_CASE("transpose rejects axes the tensor does not have", "[tensor]") {
+    Tensor matrix({2, 2});
+
+    CHECK_THROWS_AS(matrix.transpose(0, 2), std::out_of_range);
+    CHECK_THROWS_AS(Tensor({3}).transpose(), std::out_of_range);
+    CHECK_THROWS_AS(Tensor({}).transpose(0, 0), std::out_of_range);
+}
+
+TEST_CASE("kernels read a transposed view correctly", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor other({3, 2}, {10.0, 20.0, 30.0, 40.0, 50.0, 60.0});
+
+    Tensor sum = add_kernel(matrix.transpose(), other);
+
+    CHECK(sum[0][0].item() == 11.0);
+    CHECK(sum[0][1].item() == 24.0);   // 4 + 20
+    CHECK(sum[2][1].item() == 66.0);   // 6 + 60
+    CHECK(sum_kernel(matrix.transpose()).item() == 21.0);
+}
+
+TEST_CASE("cloning a transposed view compacts it", "[tensor]") {
+    Tensor matrix({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+
+    Tensor compact = matrix.transpose().clone();
+
+    CHECK(compact.shape() == std::vector<std::size_t>{3, 2});
+    CHECK(compact.element_strides() == std::vector<std::size_t>{2, 1});
+    CHECK(compact[0][1].item() == 4.0);
+    CHECK(compact[2][0].item() == 3.0);
+}
+
+TEST_CASE("matmul_kernel multiplies two matrices", "[tensor]") {
+    Tensor a({2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor b({3, 2}, {7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
+
+    Tensor product = matmul_kernel(a, b);
+
+    CHECK(product.shape() == std::vector<std::size_t>{2, 2});
+    CHECK(product[0][0].item() == 58.0);    // 1*7 + 2*9 + 3*11
+    CHECK(product[0][1].item() == 64.0);    // 1*8 + 2*10 + 3*12
+    CHECK(product[1][0].item() == 139.0);   // 4*7 + 5*9 + 6*11
+    CHECK(product[1][1].item() == 154.0);   // 4*8 + 5*10 + 6*12
+}
+
+TEST_CASE("matmul_kernel is not element-wise multiplication", "[tensor]") {
+    Tensor a({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    Tensor b({2, 2}, {5.0, 6.0, 7.0, 8.0});
+
+    Tensor product = matmul_kernel(a, b);
+
+    CHECK(product[0][0].item() == 19.0);    // 1*5 + 2*7, not 1*5
+    CHECK(product[1][1].item() == 50.0);    // 3*6 + 4*8
+}
+
+TEST_CASE("multiplying by the identity gives the original", "[tensor]") {
+    Tensor a({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    Tensor identity({2, 2}, {1.0, 0.0, 0.0, 1.0});
+
+    Tensor product = matmul_kernel(a, identity);
+
+    CHECK(product[0][1].item() == 2.0);
+    CHECK(product[1][0].item() == 3.0);
+}
+
+TEST_CASE("matmul_kernel reads transposed operands correctly", "[tensor]") {
+    Tensor a({3, 2}, {1.0, 4.0, 2.0, 5.0, 3.0, 6.0});   // the [2,3] above, transposed
+    Tensor b({3, 2}, {7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
+
+    Tensor product = matmul_kernel(a.transpose(), b);
+
+    CHECK(product.shape() == std::vector<std::size_t>{2, 2});
+    CHECK(product[0][0].item() == 58.0);
+    CHECK(product[1][1].item() == 154.0);
+}
+
+TEST_CASE("matmul_kernel handles non-square shapes", "[tensor]") {
+    Tensor a({1, 3}, {1.0, 2.0, 3.0});
+    Tensor b({3, 4}, 1.0);
+
+    Tensor product = matmul_kernel(a, b);
+
+    CHECK(product.shape() == std::vector<std::size_t>{1, 4});
+    CHECK(product[0][0].item() == 6.0);
+    CHECK(product[0][3].item() == 6.0);
+}
+
+TEST_CASE("matmul_kernel rejects shapes that do not line up", "[tensor]") {
+    CHECK_THROWS_AS(matmul_kernel(Tensor({2, 3}), Tensor({2, 3})),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(matmul_kernel(Tensor({2, 3}), Tensor({3})),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(matmul_kernel(Tensor({2}), Tensor({2, 2})),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(matmul_kernel(Tensor({2, 2, 2}), Tensor({2, 2})),
+                    std::invalid_argument);
+}
+
+TEST_CASE("matmul_kernel records no autograd history", "[tensor]") {
+    Tensor a({2, 2}, 1.0);
+    a.requires_grad_();
+
+    CHECK_FALSE(matmul_kernel(a, a).requires_grad());
+}

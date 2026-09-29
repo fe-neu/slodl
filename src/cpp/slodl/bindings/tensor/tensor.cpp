@@ -1,10 +1,13 @@
 #include <cstddef>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector <-> list/tuple, for dims and data
 
+#include "slodl/autograd/autograd.hpp"
+#include "slodl/autograd/ops.hpp"
 #include "slodl/bindings/conversions.hpp"
 #include "slodl/bindings/register.hpp"
 #include "slodl/tensor/tensor.hpp"
@@ -42,6 +45,7 @@ void register_tensor(py::module_& m) {
         .def_property_readonly(
             "shape",
             [](const Tensor& self) { return self.shape(); })
+        .def("clone", &Tensor::clone)
         .def(
             "item",
             [](const Tensor& self) { return self.item(); })
@@ -66,20 +70,91 @@ void register_tensor(py::module_& m) {
                 return py::cast(std::move(view));
             },
             py::arg("index"))
-        // t[i] = 5.0 writes a scalar; t[i] = other copies values in.
+        // Both write into the slice: Tensor assignment aliases instead, which
+        // is not what t[i] = x means in Python.
         .def(
             "__setitem__",
             [](Tensor& self, py::ssize_t index, double value) {
                 Tensor view = self[normalize_index(self, index)];
-                view = value;
+                view.fill_(value);
             },
             py::arg("index"), py::arg("value"))
         .def(
             "__setitem__",
             [](Tensor& self, py::ssize_t index, const Tensor& other) {
                 Tensor view = self[normalize_index(self, index)];
-                view = other;
+                view.copy_(other);
             },
             py::arg("index"), py::arg("value"))
+        // Each operator takes a tensor or a plain number; a number is
+        // broadcast like a 0-dimensional tensor.
+        .def("__add__", [](const Tensor& self, const Tensor& other) {
+                return add(self, other); }, py::arg("other"))
+        .def("__add__", [](const Tensor& self, double other) {
+                return add(self, other); }, py::arg("other"))
+        .def("__radd__", [](const Tensor& self, double other) {
+                return add(other, self); }, py::arg("other"))
+        .def("__mul__", [](const Tensor& self, const Tensor& other) {
+                return mul(self, other); }, py::arg("other"))
+        .def("__mul__", [](const Tensor& self, double other) {
+                return mul(self, other); }, py::arg("other"))
+        .def("__rmul__", [](const Tensor& self, double other) {
+                return mul(other, self); }, py::arg("other"))
+        .def("__rsub__", [](const Tensor& self, double other) {
+                return sub(other, self); }, py::arg("other"))
+        .def("__rtruediv__", [](const Tensor& self, double other) {
+                return div(other, self); }, py::arg("other"))
+        .def("expand", [](const Tensor& self, std::vector<std::size_t> shape) {
+                return expand(self, shape); }, py::arg("shape"))
+        .def("__matmul__", &matmul, py::arg("other"))
+        .def("transpose",
+             [](const Tensor& self, std::size_t dim0, std::size_t dim1) {
+                 return transpose(self, dim0, dim1);
+             },
+             py::arg("dim0") = 0, py::arg("dim1") = 1)
+        .def_property_readonly("T", [](const Tensor& self) {
+                return transpose(self);
+             })
+        .def("__sub__", [](const Tensor& self, const Tensor& other) {
+                return sub(self, other); }, py::arg("other"))
+        .def("__sub__", [](const Tensor& self, double other) {
+                return sub(self, other); }, py::arg("other"))
+        .def("__neg__", [](const Tensor& self) { return neg(self); })
+        // A lambda, not &div: <cstdlib> also declares std::div, so taking the
+        // address is ambiguous.
+        .def("__truediv__", [](const Tensor& self, const Tensor& other) {
+                return div(self, other); }, py::arg("other"))
+        .def("__truediv__", [](const Tensor& self, double other) {
+                return div(self, other); }, py::arg("other"))
+        .def("sum", &sum)
+        .def("mean", &mean)
+        // Autograd. requires_grad is a property, like in PyTorch, and
+        // requires_grad_ returns nothing: the Python layer returns its own
+        // wrapper so that chaining stays on the Python object.
+        .def_property(
+            "requires_grad",
+            &Tensor::requires_grad,
+            [](Tensor& self, bool flag) { self.requires_grad_(flag); })
+        .def(
+            "requires_grad_",
+            [](Tensor& self, bool flag) { self.requires_grad_(flag); },
+            py::arg("flag") = true)
+        .def_property_readonly("is_leaf", &Tensor::is_leaf)
+        // A copy of the gradient, which shares its storage, so writing to it
+        // writes through to the gradient itself.
+        .def_property_readonly(
+            "grad",
+            [](const Tensor& self) -> std::optional<Tensor> {
+                const Tensor* gradient = self.grad();
+                if (gradient == nullptr) {
+                    return std::nullopt;
+                }
+                return *gradient;
+            })
+        .def_property_readonly(
+            "grad_fn",
+            [](const Tensor& self) { return self.autograd_meta()->grad_fn; })
+        .def("detach", &Tensor::detach)
+        .def("backward", &Tensor::backward)
         .def("__repr__", &Tensor::repr);
 }

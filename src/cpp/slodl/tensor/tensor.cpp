@@ -3,25 +3,31 @@
 #include <string>
 #include <utility>
 
-#include "tensor.hpp"
-#include "tensor_storage.hpp"
+#include "slodl/tensor/tensor.hpp"
+#include "slodl/tensor/tensor_storage.hpp"
+#include "slodl/autograd/autograd.hpp"
+#include "slodl/autograd/engine.hpp"
+#include "slodl/tensor/shape.hpp"
 
 Tensor::Tensor(std::vector<std::size_t> dims)
     : storage(std::make_shared<TensorStorage>(get_size_for_dims(dims), 0.0)),
     start_offset(0),
     strides(get_strides_for_dims(dims)),
-    dims(dims) {}
+    dims(dims),
+    meta(std::make_shared<AutogradMeta>()) {}
 
 Tensor::Tensor(std::vector<std::size_t> dims, double init_value)
     : storage(std::make_shared<TensorStorage>(get_size_for_dims(dims), init_value)),
     start_offset(0),
     strides(get_strides_for_dims(dims)),
-    dims(dims) {}
+    dims(dims),
+    meta(std::make_shared<AutogradMeta>()) {}
 
 Tensor::Tensor(std::vector<std::size_t> dims, std::vector<double> data)
     : start_offset(0),
     strides(get_strides_for_dims(dims)),
-    dims(dims) {
+    dims(dims),
+    meta(std::make_shared<AutogradMeta>()) {
         if(data.size() != get_size_for_dims(dims)) {
             throw std::out_of_range("Given Data does not fit given dimensions");
         }
@@ -36,7 +42,8 @@ Tensor::Tensor(
 ) : storage(std::move(storage)),
     start_offset(start_offset),
     strides(std::move(strides)),
-    dims(std::move(dims)) {}
+    dims(std::move(dims)),
+    meta(std::make_shared<AutogradMeta>()) {}
 
 
 std::size_t Tensor::get_size_for_dims(std::vector<std::size_t> dims) {
@@ -87,6 +94,44 @@ Tensor Tensor::operator[](std::size_t index) const {
     );
 }
 
+Tensor Tensor::expand(const std::vector<std::size_t>& shape) const {
+    return Tensor(
+        storage,
+        start_offset,
+        broadcast_strides(dims, strides, shape),
+        shape
+    );
+}
+
+Tensor Tensor::transpose(std::size_t dim0, std::size_t dim1) const {
+    if (dim0 >= dims.size() || dim1 >= dims.size()) {
+        throw std::out_of_range("transpose: axis out of range");
+    }
+
+    std::vector<std::size_t> new_dims = dims;
+    std::vector<std::size_t> new_strides = strides;
+
+    std::swap(new_dims[dim0], new_dims[dim1]);
+    std::swap(new_strides[dim0], new_strides[dim1]);
+
+    return Tensor(
+        storage,
+        start_offset,
+        std::move(new_strides),
+        std::move(new_dims)
+    );
+}
+
+
+Tensor Tensor::clone() const {
+    const std::size_t element_count = get_size_for_dims(dims);
+    std::vector<double> values(element_count);
+    for(std::size_t i = 0; i < element_count; i++){
+        values[i] = storage->ptr()[get_offset_for_flat_index(i)];
+    }
+    return Tensor(dims, std::move(values));
+}
+
 double Tensor::item() const {
     if (!dims.empty()) {
         throw std::out_of_range("item() requires a 0-dimensional tensor");
@@ -94,7 +139,7 @@ double Tensor::item() const {
     return storage->ptr()[start_offset];
 }
 
-Tensor& Tensor::operator=(const Tensor& other) {
+Tensor& Tensor::copy_(const Tensor& other) {
     if (this == &other) {
         return *this;
     }
@@ -123,11 +168,12 @@ Tensor& Tensor::operator=(const Tensor& other) {
     return *this;
 }
 
-Tensor& Tensor::operator=(double value) {
-    if (!dims.empty()) {
-        throw std::out_of_range("Cannot assign a scalar to a non-scalar tensor");
+Tensor& Tensor::fill_(double value) {
+    const std::size_t element_count = get_size_for_dims(dims);
+    double* elements = storage->ptr();
+    for(std::size_t i = 0; i < element_count; i++){
+        elements[get_offset_for_flat_index(i)] = value;
     }
-    storage->ptr()[start_offset] = value;
     return *this;
 }
 
@@ -199,4 +245,58 @@ std::string Tensor::repr() const {
         out += "]";
     }
     return out + ")";
+}
+
+bool Tensor::requires_grad() const {
+    return meta->requires_grad;
+}
+
+Tensor& Tensor::requires_grad_(bool flag) {
+    if (!is_leaf()) {
+        throw std::invalid_argument(
+            "Can only change requires_grad on a leaf tensor");
+    }
+    meta->requires_grad = flag;
+    return *this;
+}
+
+bool Tensor::is_leaf() const
+{
+    return !meta->grad_fn;
+}
+
+const Tensor* Tensor::grad() const {
+    return meta->grad.get();
+}
+
+void Tensor::backward() {
+    if (!dims.empty()) {
+        throw std::invalid_argument(
+            "backward() requires a 0-dimensional tensor");
+    }
+    if (!requires_grad()) {
+        throw std::invalid_argument(
+            "backward() requires a tensor that requires a gradient");
+    }
+
+    // The starting gradient of a tensor with respect to itself is 1.
+    const Tensor seed(dims, 1.0);
+
+    // Via an edge rather than grad_fn directly, so that a scalar leaf
+    // accumulates into its own grad instead of finding no graph at all.
+    const Edge entry = gradient_edge(*this);
+    run_backward(entry.node, seed);
+}
+
+Tensor Tensor::detach() const {
+    return Tensor(
+        storage,
+        start_offset,
+        strides,
+        dims
+    );
+}
+
+std::shared_ptr<AutogradMeta> Tensor::autograd_meta() const {
+    return meta;
 }
