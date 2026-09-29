@@ -297,3 +297,45 @@ def test_expand_records_and_sums_the_gradient_back():
 def test_incompatible_shapes_still_raise():
     with pytest.raises(ValueError):
         Tensor([1.0, 2.0]) + Tensor([1.0, 2.0, 3.0])
+
+
+def test_mean_averages_every_element():
+    average = Tensor([[1.0, 2.0], [3.0, 4.0]]).mean()
+
+    assert average.shape == []
+    assert average.item() == 2.5
+
+
+def test_the_free_function_averages_like_the_method():
+    t = Tensor([1.0, 2.0, 3.0])
+
+    assert slodl.mean(t).item() == t.mean().item() == 2.0
+
+
+def test_mean_of_an_empty_tensor_is_nan():
+    value = Tensor([]).mean().item()
+
+    assert value != value
+
+
+def test_backward_through_mean_gives_every_element_one_over_n():
+    a = Tensor([1.0, 2.0, 3.0, 4.0]).requires_grad_()
+
+    a.mean().backward()
+
+    assert [a.grad[i] for i in range(4)] == [0.25, 0.25, 0.25, 0.25]
+
+
+def test_mean_is_composed_rather_than_its_own_node():
+    a = Tensor([1.0, 2.0]).requires_grad_()
+
+    assert a.mean().grad_fn.name == "DivBackward"
+
+
+def test_a_mean_squared_error_loss():
+    prediction = Tensor([3.0, 5.0]).requires_grad_()
+    error = prediction - Tensor([1.0, 1.0])
+
+    (error * error).mean().backward()
+
+    assert [prediction.grad[i] for i in range(2)] == [2.0, 4.0]

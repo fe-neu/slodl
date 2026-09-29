@@ -611,3 +611,63 @@ TEST_CASE("incompatible shapes are still rejected", "[autograd]") {
     CHECK_THROWS_AS(add(Tensor({2}), Tensor({3})), std::invalid_argument);
     CHECK_THROWS_AS(mul(Tensor({2, 3}), Tensor({2, 4})), std::invalid_argument);
 }
+
+TEST_CASE("mean averages every element", "[autograd]") {
+    Tensor average = mean(Tensor({2, 2}, {1.0, 2.0, 3.0, 4.0}));
+
+    CHECK(average.shape().empty());
+    CHECK(average.item() == 2.5);
+}
+
+TEST_CASE("mean of an empty tensor is not a number", "[autograd]") {
+    const double value = mean(Tensor({0})).item();
+
+    CHECK(value != value);
+}
+
+TEST_CASE("backward through mean gives every element 1/n", "[autograd]") {
+    Tensor a({2, 2}, {1.0, 2.0, 3.0, 4.0});
+    a.requires_grad_();
+
+    mean(a).backward();
+
+    REQUIRE(a.grad() != nullptr);
+    CHECK(a.grad()->shape() == std::vector<std::size_t>{2, 2});
+    CHECK((*a.grad())[0][0].item() == Catch::Approx(0.25));
+    CHECK((*a.grad())[1][1].item() == Catch::Approx(0.25));
+}
+
+TEST_CASE("mean records the graph of the ops it is built from", "[autograd]") {
+    Tensor a({3}, 1.0);
+    a.requires_grad_();
+
+    Tensor average = mean(a);
+
+    // Composed, not a node of its own: the last op is the division.
+    REQUIRE(average.autograd_meta()->grad_fn != nullptr);
+    CHECK(average.autograd_meta()->grad_fn->name == "DivBackward");
+}
+
+TEST_CASE("mean records nothing inside a NoGradGuard", "[autograd]") {
+    Tensor a({2}, 4.0);
+    a.requires_grad_();
+
+    NoGradGuard guard;
+    Tensor average = mean(a);
+
+    CHECK(average.item() == 4.0);
+    CHECK(average.is_leaf());
+}
+
+TEST_CASE("mean of a difference is a usable loss", "[autograd]") {
+    Tensor prediction({2}, {3.0, 5.0});
+    Tensor target({2}, {1.0, 1.0});
+    prediction.requires_grad_();
+
+    Tensor error = sub(prediction, target);
+    mean(mul(error, error)).backward();
+
+    // d/dp mean((p - t)^2) = 2(p - t)/n
+    CHECK((*prediction.grad())[0].item() == Catch::Approx(2.0));
+    CHECK((*prediction.grad())[1].item() == Catch::Approx(4.0));
+}

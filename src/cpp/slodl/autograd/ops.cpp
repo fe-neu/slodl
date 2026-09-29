@@ -150,6 +150,10 @@ Tensor sum(const Tensor& a) {
     return result;
 }
 
+Tensor mean(const Tensor& a) {
+    return div(sum(a), static_cast<double>(element_count(a.shape())));
+}
+
 // A plain number becomes a 0-dimensional tensor, which broadcast_operands then
 // stretches to the other operand's shape.
 namespace {

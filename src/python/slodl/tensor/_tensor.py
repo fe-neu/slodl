@@ -538,6 +538,39 @@ class Tensor:
         """
         return Tensor._from_impl(self._impl.expand([int(d) for d in shape]))
 
+    def mean(self) -> Tensor:
+        """Average every element of this tensor.
+
+        Returns
+        -------
+        Tensor
+            A 0-dimensional tensor holding the average, or NaN for an empty
+            tensor, since that divides zero by zero. It requires a gradient,
+            and records the operation, if this tensor does.
+
+        See Also
+        --------
+        slodl.mean : The same operation, spelled ``slodl.mean(a)``.
+        Tensor.sum : The total rather than the average.
+
+        Notes
+        -----
+        A backward pass gives every element a gradient of ``1 / n``, since
+        each one contributes that much to the average.
+
+        Examples
+        --------
+        >>> from slodl import Tensor
+        >>> Tensor([[1, 2], [3, 4]]).mean()
+        Tensor(2.5)
+
+        >>> a = Tensor([1.0, 2.0, 3.0, 4.0]).requires_grad_()
+        >>> a.mean().backward()
+        >>> a.grad
+        Tensor([0.25, 0.25, 0.25, 0.25])
+        """
+        return Tensor._from_impl(self._impl.mean())
+
     def sum(self) -> Tensor:
         """Add up every element of this tensor.
 

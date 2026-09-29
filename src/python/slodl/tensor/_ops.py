@@ -262,3 +262,45 @@ def div(a: Tensor, b: Tensor) -> Tensor:
     (Tensor(0.5), Tensor(-1.5))
     """
     return Tensor._from_impl(_core.div(a._impl, b._impl))
+
+
+def mean(a: Tensor) -> Tensor:
+    """Average every element of a tensor.
+
+    Parameters
+    ----------
+    a : Tensor
+        Tensor to average, which may be a view.
+
+    Returns
+    -------
+    Tensor
+        A 0-dimensional tensor holding the average, or NaN for an empty
+        tensor, since that divides zero by zero. It requires a gradient, and
+        records the operation, if ``a`` does.
+
+    See Also
+    --------
+    slodl.Tensor.mean : The same operation, spelled ``a.mean()``.
+    slodl.sum : The total rather than the average.
+
+    Notes
+    -----
+    A backward pass gives every element a gradient of ``1 / n``, since each
+    one contributes that much to the average.
+
+    Examples
+    --------
+    >>> from slodl import Tensor, mean
+    >>> mean(Tensor([[1, 2], [3, 4]]))
+    Tensor(2.5)
+
+    Averaging a squared error gives a loss to differentiate:
+
+    >>> prediction = Tensor([3.0, 5.0]).requires_grad_()
+    >>> error = prediction - Tensor([1.0, 1.0])
+    >>> (error * error).mean().backward()
+    >>> prediction.grad
+    Tensor([2, 4])
+    """
+    return Tensor._from_impl(_core.mean(a._impl))

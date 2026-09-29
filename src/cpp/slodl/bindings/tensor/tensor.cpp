@@ -118,6 +118,7 @@ void register_tensor(py::module_& m) {
         .def("__truediv__", [](const Tensor& self, double other) {
                 return div(self, other); }, py::arg("other"))
         .def("sum", &sum)
+        .def("mean", &mean)
         // Autograd. requires_grad is a property, like in PyTorch, and
         // requires_grad_ returns nothing: the Python layer returns its own
         // wrapper so that chaining stays on the Python object.

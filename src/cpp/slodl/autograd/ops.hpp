@@ -142,6 +142,20 @@ Tensor sum(const Tensor& a);
 
 
 /**
+ * Averages every element of a tensor, recording the operation for autograd.
+ *
+ * Composed from sum() and div() rather than given a node of its own: the graph
+ * those two record already differentiates correctly, giving every element a
+ * gradient of 1/n. Its grad_fn is therefore a DivBackward, not a node named
+ * after the mean.
+ *
+ * @param a  Tensor to average, which may be a view.
+ * @return A 0-dimensional tensor holding the average, or NaN for an empty
+ *         tensor, since that divides zero by zero.
+ */
+Tensor mean(const Tensor& a);
+
+/**
  * Scalar forms of the element-wise operations.
  *
  * A plain number is treated as a 0-dimensional tensor and broadcast against
