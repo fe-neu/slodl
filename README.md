@@ -19,9 +19,14 @@ speed.
 - **Scalars where you expect them** — indexing every dimension gives a plain
   Python `float`, the way NumPy behaves, even though the C++ side has to model
   it as a 0-dimensional tensor.
-- **Assignment copies values** — `a[0] = b` writes `b`'s elements into `a`'s
-  existing storage rather than quietly rebinding a temporary, which would look
-  identical and do nothing.
+- **Arithmetic with autograd** — `+ - * / @`, `sum`, `mean`, `transpose`, and
+  `neg`, each recording what it did so `backward()` can walk back through it.
+- **Broadcasting** — shapes are stretched NumPy-style, so a bias row adds to a
+  whole batch and plain numbers work as operands. Stretching is a view with a
+  stride of 0, and its gradient is summed back down.
+- **Writes are explicit** — assignment makes two names for one tensor, while
+  `copy_` and `fill_` write into existing storage. In Python, `a[0] = b` writes
+  values, as it does in NumPy.
 - **NumPy interoperability** — build a tensor from any array, and hand a tensor
   to `np.asarray` without copying, so the two share memory.
 - **Creation that reads like NumPy** — `Tensor([[1, 2], [3, 4]])` takes nested
@@ -83,6 +88,54 @@ independent tensor when you want one:
 ```python
 t[1] = t[0]        # row 1 now holds row 0's values
 copy = t.clone()   # shares nothing with t
+```
+
+### Autograd
+
+Mark the tensors you want gradients for, compute a scalar, and call
+`backward()`:
+
+```python
+from slodl import Tensor
+
+a = Tensor([2.0, 3.0]).requires_grad_()
+b = Tensor([10.0, 20.0]).requires_grad_()
+
+(a * b).sum().backward()
+a.grad        # Tensor([10, 20])
+b.grad        # Tensor([2, 3])
+```
+
+`backward()` needs a 0-dimensional tensor, which is what `sum` and `mean` are
+for. Gradients accumulate, so a second pass adds to the first.
+
+Matrix multiplication is `@`, and a row broadcasts across a batch, so a linear
+layer is one line:
+
+```python
+import slodl
+
+inputs = Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])   # batch of 2
+weights = slodl.full([3, 2], 0.5).requires_grad_()
+bias = slodl.full([2], 0.1).requires_grad_()
+
+outputs = inputs @ weights + bias
+outputs.mean().backward()
+
+weights.grad.shape   # [3, 2]
+bias.grad.shape      # [2]
+```
+
+Recording can be turned off, and a single tensor can be cut loose from its
+history:
+
+```python
+from slodl import no_grad
+
+with no_grad():
+    prediction = inputs @ weights + bias   # computes, records nothing
+
+weights.detach()      # same storage, no history
 ```
 
 NumPy goes in and out. Building from an array copies; `np.asarray` shares
@@ -210,7 +263,8 @@ bindings, Python wrapper, and tests mirroring that layout.
 
 ## Status
 
-Early and incomplete. `Tensor` exists with views, NumPy interoperability, and
-element access; there is no arithmetic, no slicing, no `reshape`/`transpose`,
-and nothing built on top of tensors yet. See [CHANGELOG.md](CHANGELOG.md) for
-what has landed and the current known limitations.
+Early and incomplete, but a linear model trains end to end: element-wise
+arithmetic, `matmul`, reductions, broadcasting and reverse-mode autograd all
+work. Still missing are activations, dimension-wise reductions, `reshape` and
+slicing, and anything above tensors — no `zero_grad`, optimizers or layers yet.
+See [CHANGELOG.md](CHANGELOG.md) for what has landed and the known limitations.
