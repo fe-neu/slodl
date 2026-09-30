@@ -5,7 +5,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/slodl/"><img
-     src="https://img.shields.io/pypi/v/slodl.svg" alt="PyPI"></a>
+     src="https://img.shields.io/pypi/v/slodl" alt="PyPI"></a>
 </p>
 
 # slodl
