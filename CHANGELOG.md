@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-30
+
 ### Added
 
 - `Tensor`: a dense, n-dimensional array of `float64` values, implemented in
@@ -75,24 +77,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than only a 0-dimensional tensor's one, matching `torch.Tensor.fill_`.
   In Python this means `t[0] = 1.0` fills a whole row instead of raising.
 
-### Known limitations
-
-- No activations (`relu`, `exp`, `log`), no powers, and no dimension-wise
-  reductions such as `sum(dim=...)`, so no softmax or cross-entropy.
-- Nothing above tensors: no `zero_grad`, no optimizers, no layers or modules.
-  A training loop has to rebind its parameters each step to clear gradients,
-  since in-place updates are not exposed to Python.
-- `matmul` is 2-dimensional only: no batched matmul and no vector operands.
-- Indexing takes a single integer only. There is no slicing, no multi-axis
-  indexing such as `t[1, 2]`, and no `reshape`.
-- `backward()` requires a 0-dimensional tensor; it takes no explicit gradient
-  argument, and gradients of gradients are not supported.
-- Mutating a tensor that a live graph saved (through `copy_`, `fill_` or a
-  view) silently corrupts the next backward pass. There is no version counter
-  to catch it.
-- Some errors surface in Python with a misleading type. A data/shape mismatch
-  in the constructor, and calling `item()` on a tensor that has dimensions,
-  both raise `IndexError` where `ValueError` would fit better. This is because
-  the core throws `std::out_of_range`, which pybind11 maps to `IndexError`.
 
 [Unreleased]: https://github.com/fe-neu/slodl/commits/main
+[0.1.0]: https://github.com/fe-neu/slodl/releases/tag/v0.1.0
