@@ -1,13 +1,25 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/fe-neu/slodl/main/assets/slodl_banner_mono.png"
+       alt="slodl" width="640">
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/slodl/"><img
+     src="https://img.shields.io/pypi/v/slodl.svg" alt="PyPI"></a>
+</p>
+
 # slodl
 
-A slow deep-learning framework for educational purposes, with a compiled C++17
-core and a thin, typed Python API. The data structures and numeric work live in
-an extension module (`slodl._core`); the public Python layer only adapts them to
-Python conventions and documents them.
+**Slow deep learning.** A deep-learning framework written from scratch to see
+how the pieces actually work — the tensor, autograd, the operations built on
+them — rather than to compete with the established frameworks.
 
-The project is built from the ground up — starting with the tensor — so the
-point is to see how the pieces work, not to compete with NumPy or PyTorch on
-speed.
+It will always be slower than PyTorch or NumPy, which is where the name comes
+from. Nothing here is hidden behind a library call: the storage, the views, the
+computation graph and every derivative are written out in a compiled C++17
+core, with a thin, typed Python API on top. The numeric work lives in an
+extension module (`slodl._core`); the Python layer only adapts it to Python
+conventions and documents it.
 
 ## Features
 
@@ -38,7 +50,7 @@ speed.
 ## Install
 
 ```bash
-pip install .
+pip install slodl
 ```
 
 NumPy is pulled in as a runtime dependency. No system CMake, Ninja, or compiler
@@ -196,15 +208,6 @@ is deleted afterwards, so the next `import slodl` fails the same way.
 
 If an editable checkout gets into a broken state, `rm -rf build` and re-run the
 `pip install --no-build-isolation -e .` step.
-
-### VS Code
-
-`.vscode/settings.json` points the CMake Tools extension at `.venv/bin/cmake`
-and puts `.venv/bin` on `PATH` for every configure/build/test run, since this
-repo's `cmake` and `ninja` come from the venv rather than the system. It also
-enables the CTest integration, so the Catch2 cases appear in the Testing view
-as a `tensor/` tree next to the pytest tests. Select the **dev** preset in the
-CMake status bar after opening the folder.
 
 ## Testing
 

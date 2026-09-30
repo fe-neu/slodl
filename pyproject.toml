@@ -78,6 +78,7 @@ editable.rebuild = true
 exclude = [
     ".github/",
     ".gitignore",
+    "assets/",
     "tests/",
 ]
 
