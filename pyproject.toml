@@ -1,11 +1,11 @@
 [build-system]
-requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]  # 3.x is required for Python 3.14
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "slodl"
-version = "0.0.1"
-description = "A small Python Deep-Learning-Package with a C++ Core"
+version = "0.1.0"
+description = "Deep learning from scratch: tensors and reverse-mode autograd in a C++ core"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
@@ -14,9 +14,15 @@ authors = [
     { name = "Felix Neu", email = "felix.neu.ide@web.de" },
 ]
 keywords = [
+    "autograd",
+    "automatic-differentiation",
+    "backpropagation",
+    "tensor",
     "neural-networks",
     "deep-learning",
     "machine-learning",
+    "from-scratch",
+    "educational",
     "numpy",
     "c++",
     "pybind11",
@@ -35,8 +41,11 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Education",
     "Typing :: Typed",
 ]
 dependencies = ["numpy>=1.21"]
@@ -78,16 +87,27 @@ editable.rebuild = true
 exclude = [
     ".github/",
     ".gitignore",
+    "assets/",
     "tests/",
+    # Local build trees. build-test/ matters even though git ignores it: the
+    # Catch2 that FetchContent clones into build-test/_deps/ is itself a git
+    # checkout, and the sdist's file listing descends into it, which would
+    # otherwise ship Catch2's entire source tree inside the tarball.
+    "build/",
+    "build-test/",
 ]
 
 [tool.cibuildwheel]
-# Minimal target set for the first release: CPython 3.9-3.13 on the three
+# Minimal target set for the first release: CPython 3.9-3.14 on the three
 # mainstream desktop/server platforms (Linux x86_64, macOS, Windows AMD64).
 # No PyPy, no musllinux, no Linux aarch64 yet - each can be added later
 # without a breaking change. Architectures come from `archs = "auto"` (the
 # default), so the 64-bit CI runners never attempt 32-bit builds.
-build = "cp39-* cp310-* cp311-* cp312-* cp313-*"
+#
+# 3.14 needs pybind11 3.x, which the build requirement below resolves to; the
+# free-threaded build (cp314t) is a separate target that cibuildwheel only
+# produces when asked, and the extension has not been audited for it.
+build = "cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
 skip = "*-musllinux*"
 build-frontend = "build"
 
